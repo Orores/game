@@ -16,8 +16,10 @@ let moving = { left: false, right: false, up: false, down: false };
 
 // --- delay mechanic vars ---
 let currentDelay = 0.5;
-let delayInc = false;
-let delayDec = false;
+
+// Mouse position relative to canvas
+let mouseX = BOX_WIDTH / 2;
+let mouseY = BOX_HEIGHT / 2;
 
 // Connect to the server
 const socket = io();
@@ -46,7 +48,7 @@ function emitMoveState(dir, state) {
     }
 }
 
-// Handle keyboard input for movement and delay change
+// Handle keyboard input for movement
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
         case 'KeyA':
@@ -60,21 +62,6 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'KeyS':
             if (!moving.down) { moving.down = true; emitMoveState('down', true); }
-            break;
-        case 'KeyK':
-            socket.emit('shoot');
-            break;
-        case 'KeyL':
-            if (!delayInc) {
-                delayInc = true;
-                socket.emit('delay_inc_start');
-            }
-            break;
-        case 'KeyJ':
-            if (!delayDec) {
-                delayDec = true;
-                socket.emit('delay_dec_start');
-            }
             break;
     }
 });
@@ -93,20 +80,35 @@ document.addEventListener('keyup', (e) => {
         case 'KeyS':
             if (moving.down) { moving.down = false; emitMoveState('down', false); }
             break;
-        case 'KeyL':
-            if (delayInc) {
-                delayInc = false;
-                socket.emit('delay_inc_stop');
-            }
-            break;
-        case 'KeyJ':
-            if (delayDec) {
-                delayDec = false;
-                socket.emit('delay_dec_stop');
-            }
-            break;
     }
 });
+
+// --- Mouse targeting & shooting ---
+canvas.addEventListener('mousemove', function(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+});
+
+// Shoot on left mouse button
+canvas.addEventListener('mousedown', function(e) {
+    if (e.button === 0) {
+        socket.emit('shoot', { x: mouseX, y: mouseY });
+    }
+});
+
+// --- Mouse wheel for delay add/reduce ---
+canvas.addEventListener('wheel', function(e) {
+    if (e.deltaY < 0) {
+        // Scroll up: increase delay
+        socket.emit('delay_inc');
+    } else if (e.deltaY > 0) {
+        // Scroll down: decrease delay
+        socket.emit('delay_dec');
+    }
+    // Prevent page scroll
+    e.preventDefault();
+}, { passive: false });
 
 // Draw the game box, all players, their ghosts, and shots
 function draw() {
@@ -165,7 +167,7 @@ function updateDelayDisplay() {
         delayDiv.style.textAlign = 'center';
         document.body.insertBefore(delayDiv, document.body.children[1]);
     }
-    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (J/L to change)`;
+    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (Scroll up/down to change)`;
 }
 
 // Initial draw

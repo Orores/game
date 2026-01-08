@@ -20,6 +20,7 @@ h2 {
     margin: 0 auto;
     outline: none;
     box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    cursor: crosshair;
 }
 
 #delay {
@@ -35,6 +36,15 @@ p {
     color: #444;
     font-size: 1rem;
     text-align: center;
+}
+
+/* Instructions for controls */
+#instructions {
+    margin-top: 16px;
+    color: #555;
+    font-size: 0.98rem;
+    text-align: center;
+    font-style: italic;
 }
 
 /* No client-side movement loop needed; movement is managed by discrete key events sent to the server. */

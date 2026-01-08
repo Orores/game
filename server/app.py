@@ -1,7 +1,6 @@
 from flask import Flask, send_from_directory, request
 from flask_socketio import SocketIO, emit
 import time
-import threading
 
 from server.shooting import handle_shoot, update_shots
 from server.ghost import get_ghost_position, prune_history, DEFAULT_GHOST_DELAY, MIN_GHOST_DELAY, MAX_GHOST_DELAY
@@ -22,12 +21,8 @@ DELAY_CHANGE_RATE = 0.0175
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60
 SHOOT_COOLDOWN = 1.0
 
-# Server-side game state
 players = {}
 shots = []
-
-# --- Movement state for each player (server authoritative) ---
-# For each player: {'move': {'up': False, 'down': False, 'left': False, 'right': False}}
 
 def get_blank_move_state():
     return {'left': False, 'right': False, 'up': False, 'down': False}
@@ -75,7 +70,7 @@ def handle_move_stop(data):
         p['move'][direction] = False
 
 @socketio.on('shoot')
-def on_shoot():
+def on_shoot(data):
     p = players.get(request.sid)
     now = time.time()
     if not p:
@@ -83,32 +78,21 @@ def on_shoot():
     if now - p.get('last_shot', 0) < SHOOT_COOLDOWN:
         return
     p['last_shot'] = now
-    handle_shoot(players, shots, request.sid)
+    # Expecting {'x': ..., 'y': ...} from client for mouse targeting
+    handle_shoot(players, shots, request.sid, data)
 
-# --- Continuous delay change support ---
-@socketio.on('delay_inc_start')
-def handle_delay_inc_start():
+# --- Mouse wheel for delay increase/decrease ---
+@socketio.on('delay_inc')
+def handle_delay_inc():
     p = players.get(request.sid)
     if p:
-        p['delay_inc'] = True
+        p['delay'] = min(MAX_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) + DELAY_CHANGE_RATE)
 
-@socketio.on('delay_inc_stop')
-def handle_delay_inc_stop():
+@socketio.on('delay_dec')
+def handle_delay_dec():
     p = players.get(request.sid)
     if p:
-        p['delay_inc'] = False
-
-@socketio.on('delay_dec_start')
-def handle_delay_dec_start():
-    p = players.get(request.sid)
-    if p:
-        p['delay_dec'] = True
-
-@socketio.on('delay_dec_stop')
-def handle_delay_dec_stop():
-    p = players.get(request.sid)
-    if p:
-        p['delay_dec'] = False
+        p['delay'] = max(MIN_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) - DELAY_CHANGE_RATE)
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -165,17 +149,9 @@ def emit_game_state():
     ]
     socketio.emit('state', state)
 
-def process_delays():
-    for p in players.values():
-        if p.get('delay_inc'):
-            p['delay'] = min(MAX_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) + DELAY_CHANGE_RATE)
-        if p.get('delay_dec'):
-            p['delay'] = max(MIN_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) - DELAY_CHANGE_RATE)
-
 def game_state_broadcast_loop():
     while True:
         update_player_positions()
-        process_delays()
         update_shots(players, shots)
         emit_game_state()
         socketio.sleep(GAMESTATE_EMIT_INTERVAL)

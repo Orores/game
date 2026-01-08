@@ -2,34 +2,13 @@
 
 import math
 import time
+from server.ghost import get_ghost_position, DEFAULT_GHOST_DELAY
 
 BOX_WIDTH = 500
 BOX_HEIGHT = 500
 PLAYER_RADIUS = 20
-GHOST_DELAY = 1.0
 SHOT_SPEED = 6
 SHOT_RADIUS = 5
-
-def get_ghost_position(history, now, delay):
-    target_time = now - delay
-    if not history:
-        return None
-    h1, h2 = None, None
-    for i in range(len(history) - 1):
-        if history[i]['t'] <= target_time <= history[i + 1]['t']:
-            h1 = history[i]
-            h2 = history[i + 1]
-            break
-    if h1 and h2:
-        t1, t2 = h1['t'], h2['t']
-        ratio = (target_time - t1) / (t2 - t1) if t2 != t1 else 0
-        x = h1['x'] + (h2['x'] - h1['x']) * ratio
-        y = h1['y'] + (h2['y'] - h1['y']) * ratio
-        return {'x': x, 'y': y}
-    elif target_time <= history[0]['t']:
-        return {'x': history[0]['x'], 'y': history[0]['y']}
-    else:
-        return {'x': history[-1]['x'], 'y': history[-1]['y']}
 
 def handle_shoot(players, shots, shooter_sid):
     shooter = players.get(shooter_sid)
@@ -42,7 +21,8 @@ def handle_shoot(players, shots, shooter_sid):
     for sid, p in players.items():
         if sid == shooter_sid:
             continue
-        ghost = get_ghost_position(p['history'], now, GHOST_DELAY)
+        delay = p.get('delay', DEFAULT_GHOST_DELAY)
+        ghost = get_ghost_position(p['history'], now, delay)
         if ghost is None:
             continue
         dist = math.hypot(ghost['x'] - shooter['x'], ghost['y'] - shooter['y'])
@@ -83,7 +63,8 @@ def update_shots(players, shots):
         if not target_player:
             to_remove.append(shot)
             continue
-        ghost = get_ghost_position(target_player['history'], now, GHOST_DELAY)
+        delay = target_player.get('delay', DEFAULT_GHOST_DELAY)
+        ghost = get_ghost_position(target_player['history'], now, delay)
         if ghost:
             dx = shot['x'] - ghost['x']
             dy = shot['y'] - ghost['y']

@@ -10,10 +10,14 @@ const GHOST_ALPHA = 0.4; // Transparency for ghost
 const SHOT_RADIUS = 5;
 
 let myId = null;
-let players = {}; // { socketId: {x, y, ghost: {x, y}} }
+let players = {}; // { socketId: {x, y, ghost: {x, y}, delay: number} }
 let shots = [];   // [{x, y}]
 let moveX = 0;
 let moveY = 0;
+
+// --- delay mechanic vars ---
+const DELAY_CHANGE_RATE = 0.1; // must match server/app.py
+let currentDelay = 0.5; // will be set from server state
 
 // Connect to the server
 const socket = io('http://localhost:5000');
@@ -27,10 +31,15 @@ socket.on('state', (data) => {
     if (!myId) {
         myId = socket.id;
     }
+    // Update my delay for display
+    if (players[myId] && typeof players[myId].delay === "number") {
+        currentDelay = players[myId].delay;
+    }
     draw();
+    updateDelayDisplay();
 });
 
-// Handle keyboard input for continuous movement and shooting
+// Handle keyboard input for continuous movement, shooting and delay
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
         case 'KeyA':
@@ -47,6 +56,12 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'KeyK':
             socket.emit('shoot');
+            break;
+        case 'KeyJ':
+            socket.emit('decrease_delay');
+            break;
+        case 'KeyL':
+            socket.emit('increase_delay');
             break;
     }
 });
@@ -118,6 +133,22 @@ function draw() {
         ctx.textAlign = "center";
         ctx.fillText("Score: " + (p.score || 0), p.x, p.y - PLAYER_RADIUS - 10);
     }
+}
+
+// --- Delay display ---
+function updateDelayDisplay() {
+    let delayDiv = document.getElementById('delay');
+    if (!delayDiv) {
+        delayDiv = document.createElement('div');
+        delayDiv.id = 'delay';
+        delayDiv.style.marginTop = '10px';
+        delayDiv.style.fontSize = '1.1rem';
+        delayDiv.style.fontWeight = 'bold';
+        delayDiv.style.color = '#0074D9';
+        delayDiv.style.textAlign = 'center';
+        document.body.insertBefore(delayDiv, document.body.children[1]);
+    }
+    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(2)}s (J/L to change)`;
 }
 
 // Initial draw

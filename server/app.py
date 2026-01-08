@@ -20,7 +20,12 @@ MOVE_AMOUNT = 3
 START_X = BOX_WIDTH // 2
 START_Y = BOX_HEIGHT // 2
 
-GHOST_DELAY = 1.0  # seconds
+# GHOST DELAY SUPPORT
+DEFAULT_GHOST_DELAY = 0.5  # seconds (initial delay per player)
+MIN_GHOST_DELAY = 0.1      # minimum value in seconds
+MAX_GHOST_DELAY = 1.0      # maximum value in seconds
+DELAY_CHANGE_RATE = 0.1    # how much to change per J/L press
+
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60  # 60 FPS
 
 @app.route('/')
@@ -63,7 +68,8 @@ def on_connect():
         'x': START_X,
         'y': START_Y,
         'history': [{'x': START_X, 'y': START_Y, 't': now}],
-        'score': 0
+        'score': 0,
+        'delay': DEFAULT_GHOST_DELAY, # each player starts with their own delay
     }
     # Start background thread once
     global broadcast_thread
@@ -89,13 +95,33 @@ def handle_move(data):
     if 'history' not in p:
         p['history'] = []
     p['history'].append({'x': x, 'y': y, 't': now})
-    max_age = GHOST_DELAY + 0.5
+    # Prune only necessary history (max delay + margin)
+    max_player_delay = p.get('delay', DEFAULT_GHOST_DELAY)
+    max_age = max(MAX_GHOST_DELAY, max_player_delay) + 0.5
     p['history'] = prune_history(p['history'], now, max_age)
 
 @socketio.on('shoot')
 def on_shoot():
     # Call shooting mechanic from shooting.py
     handle_shoot(players, shots, request.sid)
+
+@socketio.on('increase_delay')
+def handle_increase_delay():
+    p = players.get(request.sid)
+    if not p:
+        return
+    current = p.get('delay', DEFAULT_GHOST_DELAY)
+    new_delay = min(MAX_GHOST_DELAY, current + DELAY_CHANGE_RATE)
+    p['delay'] = new_delay
+
+@socketio.on('decrease_delay')
+def handle_decrease_delay():
+    p = players.get(request.sid)
+    if not p:
+        return
+    current = p.get('delay', DEFAULT_GHOST_DELAY)
+    new_delay = max(MIN_GHOST_DELAY, current - DELAY_CHANGE_RATE)
+    p['delay'] = new_delay
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -107,12 +133,14 @@ def emit_game_state():
     now = time.time()
     state = {}
     for sid, p in players.items():
-        ghost_pos = get_ghost_position(p['history'], now, GHOST_DELAY)
+        # Use each player's own delay for their ghost display
+        ghost_pos = get_ghost_position(p['history'], now, p.get('delay', DEFAULT_GHOST_DELAY))
         state[sid] = {
             'x': p['x'],
             'y': p['y'],
             'ghost': ghost_pos,
-            'score': p.get('score', 0)
+            'score': p.get('score', 0),
+            'delay': p.get('delay', DEFAULT_GHOST_DELAY), # expose delay to client
         }
     # Add shots to state for broadcasting
     state['shots'] = [

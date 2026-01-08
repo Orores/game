@@ -1,0 +1,37 @@
+```
+Waterfall Diagram for Web-Based Game with Flask & Sockets
+
+Client                               Server
+  |                                     |
+  |------ Connect to ws://:5000 ------->|
+  |                                     |
+  |         (Server initializes         |
+  |          player state, sends x)     |
+  |<------ emit('state', {x}) ----------|
+  |                                     |
+  |  (User presses/holds 'A' or 'D')    |
+  |------ emit('move', {direction})---->|
+  |                                     |
+  |        (Server calculates new x     |
+  |         position, updates state)    |
+  |<------ emit('state', {x}) ----------|
+  |                                     |
+  | (Client updates sprite position)    |
+  |                                     |
+  |------[repeat while key held]--------|
+  |                                     |
+  |------- (disconnect) --------------->|
+  |       (Server cleans up)            |
+  |                                     |
+
+----------------------------------------
+To make movement fluid (not "cutting"):
+
+- Do not emit 'move' only once per key press.
+- Instead, on the client, when a movement key is held down ('A' or 'D'):
+    - Start a timer/interval (e.g., setInterval in JS) that emits 'move' events repeatedly while the key is held.
+    - Stop emitting when the key is released (onkeyup).
+- Server continues to handle incoming move events and returns updated positions.
+- This creates a continuous, fluid movement as long as the key is held.
+
+```

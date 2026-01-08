@@ -9,28 +9,4 @@ Show me the waterfall diagramm of what events ought to happen so i can prgoramm 
 
 Implement that using the provided file structure.
 
-orores@orores-laptop:~/04_latency_game$ python -m server.app
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/orores/04_latency_game/server/app.py", line 7, in <module>
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='asgi')
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/flask_socketio/__ini
-t__.py", line 186, in __init__
-    self.init_app(app, **kwargs)
-  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/flask_socketio/__ini
-t__.py", line 242, in init_app
-    self.server = socketio.Server(**self.server_options)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/socketio/base_server
-.py", line 34, in __init__
-    self.eio = self._engineio_server_class()(**engineio_options)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/engineio/base_server
-.py", line 94, in __init__
-    raise ValueError('Invalid async_mode specified')
-ValueError: Invalid async_mode specified
-orores@orores-laptop:~/04_latency_game$ 
-
-fix the error.
+do the continues movement

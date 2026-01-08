@@ -6,55 +6,42 @@ const ctx = canvas.getContext('2d');
 const PLAYER_RADIUS = 20;
 const BOX_WIDTH = 500;
 const BOX_HEIGHT = 500;
-const GHOST_ALPHA = 0.4; // Transparency for ghost
+const GHOST_ALPHA = 0.4;
 const SHOT_RADIUS = 5;
 
 let myId = null;
-let players = {}; // { socketId: {x, y, ghost: {x, y}, delay: number} }
+let players = {}; // { socketId: {x, y, ghost: {x, y}, delay: number, score: number} }
 let shots = [];   // [{x, y}]
 let moveX = 0;
 let moveY = 0;
 
-// --- delay mechanic vars ---
-let currentDelay = 0.5; // will be set from server state
+// Delay controls
+let currentDelay = 0.5;
 let delayInc = false;
 let delayDec = false;
 
-// Connect to the server
+// Connect to server
 const socket = io('http://localhost:5000');
 
-// Listen for state updates from the server (sent continuously)
+// Receive state from server
 socket.on('state', (data) => {
-    // shots array is inside data.shots, others are player data
     shots = data.shots || [];
     delete data.shots;
     players = data;
-    if (!myId) {
-        myId = socket.id;
-    }
-    // Update my delay for display
-    if (players[myId] && typeof players[myId].delay === "number") {
+    if (!myId) myId = socket.id;
+    if (players[myId] && typeof players[myId].delay === "number")
         currentDelay = players[myId].delay;
-    }
     draw();
     updateDelayDisplay();
 });
 
-// Handle keyboard input for continuous movement and delay change
+// --- Input handling ---
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
-        case 'KeyA':
-            moveX = -1;
-            break;
-        case 'KeyD':
-            moveX = 1;
-            break;
-        case 'KeyW':
-            moveY = -1;
-            break;
-        case 'KeyS':
-            moveY = 1;
-            break;
+        case 'KeyA': moveX = -1; break;
+        case 'KeyD': moveX = 1; break;
+        case 'KeyW': moveY = -1; break;
+        case 'KeyS': moveY = 1; break;
         case 'KeyK':
             socket.emit('shoot');
             break;
@@ -72,21 +59,12 @@ document.addEventListener('keydown', (e) => {
             break;
     }
 });
-
 document.addEventListener('keyup', (e) => {
     switch (e.code) {
-        case 'KeyA':
-            if (moveX === -1) moveX = 0;
-            break;
-        case 'KeyD':
-            if (moveX === 1) moveX = 0;
-            break;
-        case 'KeyW':
-            if (moveY === -1) moveY = 0;
-            break;
-        case 'KeyS':
-            if (moveY === 1) moveY = 0;
-            break;
+        case 'KeyA': if (moveX === -1) moveX = 0; break;
+        case 'KeyD': if (moveX === 1) moveX = 0; break;
+        case 'KeyW': if (moveY === -1) moveY = 0; break;
+        case 'KeyS': if (moveY === 1) moveY = 0; break;
         case 'KeyL':
             if (delayInc) {
                 delayInc = false;
@@ -102,7 +80,7 @@ document.addEventListener('keyup', (e) => {
     }
 });
 
-// Send move request to server on each animation frame
+// Movement loop
 function movementLoop() {
     if (moveX !== 0 || moveY !== 0) {
         socket.emit('move', { dx: moveX, dy: moveY });
@@ -110,16 +88,16 @@ function movementLoop() {
     requestAnimationFrame(movementLoop);
 }
 
-// Draw the game box, all players, their ghosts, and shots
+// Drawing function
 function draw() {
     ctx.clearRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
 
-    // Draw box border
+    // Box border
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
 
-    // Draw shots
+    // Shots
     ctx.fillStyle = "#222";
     for (const shot of shots) {
         ctx.beginPath();
@@ -127,9 +105,10 @@ function draw() {
         ctx.fill();
     }
 
+    // Players and ghosts
     for (const id in players) {
         const p = players[id];
-        // Draw ghost
+        // Ghost
         if (p.ghost && typeof p.ghost.x === 'number' && typeof p.ghost.y === 'number') {
             ctx.save();
             ctx.globalAlpha = GHOST_ALPHA;
@@ -140,13 +119,12 @@ function draw() {
             ctx.globalAlpha = 1.0;
             ctx.restore();
         }
-        // Draw player
+        // Player
         ctx.beginPath();
         ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = id === myId ? '#0074D9' : '#FF4136';
         ctx.fill();
 
-        // Draw score (above player)
         ctx.fillStyle = "#000";
         ctx.font = "bold 16px Arial";
         ctx.textAlign = "center";
@@ -154,7 +132,7 @@ function draw() {
     }
 }
 
-// --- Delay display ---
+// Delay UI
 function updateDelayDisplay() {
     let delayDiv = document.getElementById('delay');
     if (!delayDiv) {
@@ -170,10 +148,7 @@ function updateDelayDisplay() {
     delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (J/L to change)`;
 }
 
-// Initial draw
+// Initial draw and start movement
 draw();
-
-// Start movement loop
 movementLoop();
-
 canvas.focus();

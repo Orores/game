@@ -9,4 +9,4 @@ I am programming a web based game using python flask and sockets.
 7. Continous emission loop
 8. variable ghost delay.
 
-offload the ghost mechanic to ghost.py, make sure to update shootign too so it'S not broken.
+limit shooting sped to one per second, even if shooting key is held down.

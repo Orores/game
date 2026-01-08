@@ -14,7 +14,9 @@ def handle_shoot(players, shots, shooter_sid):
     shooter = players.get(shooter_sid)
     if not shooter:
         return
+
     now = time.time()
+    # Find the closest target's ghost
     target_sid = None
     target_ghost = None
     min_dist = None
@@ -32,6 +34,7 @@ def handle_shoot(players, shots, shooter_sid):
             target_ghost = ghost
     if target_sid is None or target_ghost is None:
         return
+
     dx = target_ghost['x'] - shooter['x']
     dy = target_ghost['y'] - shooter['y']
     dist = math.hypot(dx, dy)
@@ -69,7 +72,7 @@ def update_shots(players, shots):
             dx = shot['x'] - ghost['x']
             dy = shot['y'] - ghost['y']
             if (dx ** 2 + dy ** 2) <= (PLAYER_RADIUS ** 2):
-                # Score!
+                # Score for the shooter!
                 owner = players.get(shot['owner'])
                 if owner:
                     owner['score'] = owner.get('score', 0) + 1

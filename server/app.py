@@ -22,6 +22,7 @@ START_Y = BOX_HEIGHT // 2
 DELAY_CHANGE_RATE = 0.0175  # how much to change per event
 
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60  # 60 FPS
+SHOOT_COOLDOWN = 1.0  # seconds between shots
 
 @app.route('/')
 def index():
@@ -42,6 +43,7 @@ def on_connect():
         'delay': DEFAULT_GHOST_DELAY,
         'delay_inc': False,
         'delay_dec': False,
+        'last_shot': 0,  # For cooldown
     }
     # Start background thread once
     global broadcast_thread
@@ -73,6 +75,14 @@ def handle_move(data):
 
 @socketio.on('shoot')
 def on_shoot():
+    p = players.get(request.sid)
+    now = time.time()
+    if not p:
+        return
+    # Limit shooting speed: only 1 shot per second
+    if now - p.get('last_shot', 0) < SHOOT_COOLDOWN:
+        return
+    p['last_shot'] = now
     handle_shoot(players, shots, request.sid)
 
 # --- Continuous delay change support ---

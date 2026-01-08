@@ -1,62 +1,13 @@
-```
-How to Add a "Ghost" (Delayed Shadow) for Each Player
+To make the game continuously update on the client side (even without input), you need the server to periodically send updated game states to all connected clients, not just in response to movement inputs. Here’s how you can do it:
 
-Goal:
-For each player, display a "ghost" that mimics the player's movements, but with a fixed delay (e.g., 1 second). The ghost is drawn at the position the player was at 1 second ago, and uses the same color but darker.
+**1. Add a periodic update loop on the server:**
+Use a background task (for example, with Flask-SocketIO’s `start_background_task` and `socketio.sleep`) to regularly emit the current game state to all clients.
 
-Approach:
+**2. Remove redundant `emit_game_state()` calls if desired:**  
+You can keep or remove emitting state after every move/disconnect, depending on how responsive you want the game to be.
 
-1. **Maintain Position History (Server Side)**
-   - For each player, track the last N positions, where N = delay_seconds * movement_update_rate (e.g., if delay is 1s and updates are 60 FPS, N=60).
-   - Store this as a list/queue for each player in addition to their current position.
+**3. Client-side:**  
+No changes are needed; the client will now receive regular state updates and redraw even when no input is sent.
 
-2. **Update History on Movement (Server Side)**
-   - On each move, append the new position to that player's history.
-   - If the history exceeds N, pop the oldest position.
-
-3. **Send Ghost Position to Clients (Server Side)**
-   - When emitting the game state, for each player, send both:
-     - The current position
-     - The "ghost" position (i.e., the position from N updates ago, or the oldest in the history if not enough time has passed)
-   - Structure could be:
-     ```python
-     {
-       player_id: {
-         'x': ...,
-         'y': ...,
-         'ghost_x': ...,
-         'ghost_y': ...
-       },
-       ...
-     }
-     ```
-
-4. **Client Side Rendering**
-   - When drawing each player, also draw their ghost at the supplied ghost position.
-   - Use a darker color for the ghost (e.g., by reducing brightness or opacity).
-
-Details and Example (Python/JS):
-
-**Server Side (Python):**
-- Extend the `players` dictionary to store a position history for each player:
-  ```python
-  # Example: players = { sid: {'x':..., 'y':..., 'history': [ {'x':.., 'y':..}, ... ] } }
-  ```
-- On each move, append new position to `history` and pop from front if longer than N.
-- When broadcasting state, include `ghost_x` and `ghost_y` for each player as the position from N frames ago (or the earliest recorded).
-
-**Client Side (JS):**
-- Update the rendering loop to, for each player:
-  - Draw the player at (x, y) in their color.
-  - Draw the ghost at (ghost_x, ghost_y) in a darker version of the same color (e.g., lower opacity or tinted).
-
-**Tuning the Delay:**
-- The delay amount (1 second by default) and the tick/update interval determine how many history entries must be kept. For example, if moves are processed at 60Hz, keep 60 positions.
-
-**Summary:**
-- Track each player’s movement history on the server.
-- On each update, send both the current position and the delayed ("ghost") position to clients.
-- Clients draw the ghost in a darker version of the player’s color at the delayed position.
-
-This approach gives each player a trailing "ghost" that moves exactly as they do, but delayed by the specified time.
-```
+**Summary:**  
+Add a server-side periodic broadcast of the game state using a background task. This way, clients keep receiving updates and ghost positions move smoothly, even when players aren't pressing keys.

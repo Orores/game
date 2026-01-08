@@ -26,3 +26,9 @@ p {
     color: #444;
     font-size: 1rem;
 }
+
+/* Optional: highlight ghost visually with a drop shadow for clarity */
+.ghost {
+    /* Not used in JS version, but for future CSS-based canvas overlay: */
+    filter: brightness(60%) blur(1px);
+}

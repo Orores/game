@@ -5,7 +5,6 @@ I am programming a web based game using python flask and sockets.
 3. I can move left or right using A and D W S
 4. The calculation are done server side
 5. Support multiple player by broadcoasting.
+6. Theres a ghost with delay.
 
-I want to now add a ghost to each player, the ghost does the same movement than a player, but delayed by exactly one second (variable). the shadow of the player has the same color but darker.
-
-How would i implement that?
+nice remove the emit game state and instead use continous emission.

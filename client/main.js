@@ -21,7 +21,7 @@ let delayInc = false;
 let delayDec = false;
 
 // Connect to the server
-const socket = io('http://localhost:5000');
+const socket = io();
 
 // Listen for state updates from the server (sent continuously)
 socket.on('state', (data) => {

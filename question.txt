@@ -1,0 +1,21 @@
+I want to programm a game.
+
+I want to use a socket server,
+all calcualtions are done server side.
+2 player game
+the inputs are send from client to server
+the result is sent from server to client.
+The game shall run through the browser.
+
+I know python. I want to keep it simple. What stack do you suggest to use. What should the repo look like (fodler tree)
+
+--
+
+Nice then game shall be simple. Up to two clients can connect to server and move a circle using WASD.
+
+Explain to me the implementation and what shoudl go into each file.
+Write a list of function and objects.
+
+--
+
+nice populate the files now.

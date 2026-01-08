@@ -1,0 +1,25 @@
+```
+I suggest using the following stack for your simple 2-player browser game:
+
+Stack:
+- Backend: Python with Flask + Flask-SocketIO (enables real-time communication using websockets)
+- Frontend: HTML + JavaScript (vanilla or minimal library if needed)
+- Communication: WebSockets (via Flask-SocketIO)
+- Run server-side calculations in Python
+- Clients connect via browser and send inputs, server processes and returns results
+
+Sample repo folder structure:
+
+04_latency_game/
+├── server/
+│   ├── app.py               # Flask/SocketIO server code
+│   └── requirements.txt     # Python dependencies
+├── client/
+│   ├── index.html           # Main HTML file
+│   ├── main.js              # JavaScript for client-side socket handling
+│   └── style.css            # (Optional) styles
+├── README.md                # Project documentation
+└── empty.txt                # Reference file as per your setup
+
+This setup keeps things simple, is beginner-friendly, and allows all calculations on the server.
+```

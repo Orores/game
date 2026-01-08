@@ -7,9 +7,11 @@ const PLAYER_RADIUS = 20;
 const BOX_WIDTH = 500;
 const BOX_HEIGHT = 500;
 const GHOST_ALPHA = 0.4; // Transparency for ghost
+const SHOT_RADIUS = 5;
 
 let myId = null;
 let players = {}; // { socketId: {x, y, ghost: {x, y}} }
+let shots = [];   // [{x, y}]
 let moveX = 0;
 let moveY = 0;
 
@@ -18,6 +20,9 @@ const socket = io('http://localhost:5000');
 
 // Listen for state updates from the server (sent continuously)
 socket.on('state', (data) => {
+    // shots array is inside data.shots, others are player data
+    shots = data.shots || [];
+    delete data.shots;
     players = data;
     if (!myId) {
         myId = socket.id;
@@ -25,7 +30,7 @@ socket.on('state', (data) => {
     draw();
 });
 
-// Handle keyboard input for continuous movement
+// Handle keyboard input for continuous movement and shooting
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
         case 'KeyA':
@@ -39,6 +44,9 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'KeyS':
             moveY = 1;
+            break;
+        case 'KeyK':
+            socket.emit('shoot');
             break;
     }
 });
@@ -68,7 +76,7 @@ function movementLoop() {
     requestAnimationFrame(movementLoop);
 }
 
-// Draw the game box and all players, including their ghosts
+// Draw the game box, all players, their ghosts, and shots
 function draw() {
     ctx.clearRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
 
@@ -76,6 +84,14 @@ function draw() {
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
+
+    // Draw shots
+    ctx.fillStyle = "#222";
+    for (const shot of shots) {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, SHOT_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
     for (const id in players) {
         const p = players[id];
@@ -95,6 +111,12 @@ function draw() {
         ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = id === myId ? '#0074D9' : '#FF4136';
         ctx.fill();
+
+        // Draw score (above player)
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Score: " + (p.score || 0), p.x, p.y - PLAYER_RADIUS - 10);
     }
 }
 

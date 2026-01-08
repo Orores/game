@@ -2,6 +2,7 @@ from flask import Flask, send_from_directory, request
 from flask_socketio import SocketIO, emit
 import time
 import threading
+import math
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -17,7 +18,12 @@ START_X = BOX_WIDTH // 2
 START_Y = BOX_HEIGHT // 2
 
 GHOST_DELAY = 1.0  # seconds
-GAMESTATE_EMIT_INTERVAL = 1.0 / 60  # 30 FPS
+GAMESTATE_EMIT_INTERVAL = 1.0 / 60  # 60 FPS
+
+SHOT_SPEED = 6
+SHOT_RADIUS = 5
+
+shots = []  # Each shot: {'x', 'y', 'vx', 'vy', 'owner', 'target_sid'}
 
 @app.route('/')
 def index():
@@ -35,10 +41,8 @@ def get_ghost_position(history, now, delay):
     target_time = now - delay
     if not history:
         return None
-    # Find two history entries bracketing target_time, for interpolation
-    h1 = None
-    h2 = None
-    for i in range(len(history)-1):
+    h1, h2 = None, None
+    for i in range(len(history) - 1):
         if history[i]['t'] <= target_time <= history[i+1]['t']:
             h1 = history[i]
             h2 = history[i+1]
@@ -51,10 +55,8 @@ def get_ghost_position(history, now, delay):
         y = h1['y'] + (h2['y'] - h1['y']) * ratio
         return {'x': x, 'y': y}
     elif target_time <= history[0]['t']:
-        # Too old, just use the oldest
         return {'x': history[0]['x'], 'y': history[0]['y']}
     else:
-        # Not enough history, use latest
         return {'x': history[-1]['x'], 'y': history[-1]['y']}
 
 @socketio.on('connect')
@@ -63,7 +65,8 @@ def handle_connect():
     players[request.sid] = {
         'x': START_X,
         'y': START_Y,
-        'history': [{'x': START_X, 'y': START_Y, 't': now}]
+        'history': [{'x': START_X, 'y': START_Y, 't': now}],
+        'score': 0
     }
 
 @socketio.on('move')
@@ -91,9 +94,82 @@ def handle_move(data):
     max_age = GHOST_DELAY + 0.5
     p['history'] = prune_history(p['history'], now, max_age)
 
+@socketio.on('shoot')
+def handle_shoot():
+    shooter = players.get(request.sid)
+    if not shooter:
+        return
+    # Find the nearest enemy ghost
+    now = time.time()
+    target_sid = None
+    target_ghost = None
+    min_dist = None
+    for sid, p in players.items():
+        if sid == request.sid:
+            continue
+        ghost = get_ghost_position(p['history'], now, GHOST_DELAY)
+        if ghost is None:
+            continue
+        dist = math.hypot(ghost['x'] - shooter['x'], ghost['y'] - shooter['y'])
+        if min_dist is None or dist < min_dist:
+            min_dist = dist
+            target_sid = sid
+            target_ghost = ghost
+    if target_sid is None or target_ghost is None:
+        return  # No target
+    # Compute velocity vector
+    dx = target_ghost['x'] - shooter['x']
+    dy = target_ghost['y'] - shooter['y']
+    dist = math.hypot(dx, dy)
+    if dist == 0:
+        return
+    vx = dx / dist * SHOT_SPEED
+    vy = dy / dist * SHOT_SPEED
+    shots.append({
+        'x': shooter['x'],
+        'y': shooter['y'],
+        'vx': vx,
+        'vy': vy,
+        'owner': request.sid,
+        'target_sid': target_sid,
+    })
+
 @socketio.on('disconnect')
 def handle_disconnect():
     players.pop(request.sid, None)
+    # Remove shots owned by or targeting this player
+    global shots
+    shots = [shot for shot in shots if shot['owner'] != request.sid and shot['target_sid'] != request.sid]
+
+def update_shots():
+    global shots
+    now = time.time()
+    to_remove = []
+    for shot in shots:
+        shot['x'] += shot['vx']
+        shot['y'] += shot['vy']
+        # Remove if out of bounds
+        if not (0 <= shot['x'] <= BOX_WIDTH and 0 <= shot['y'] <= BOX_HEIGHT):
+            to_remove.append(shot)
+            continue
+        # Check collision with target ghost
+        target_player = players.get(shot['target_sid'])
+        if not target_player:
+            to_remove.append(shot)
+            continue
+        ghost = get_ghost_position(target_player['history'], now, GHOST_DELAY)
+        if ghost:
+            dx = shot['x'] - ghost['x']
+            dy = shot['y'] - ghost['y']
+            if (dx ** 2 + dy ** 2) <= (PLAYER_RADIUS ** 2):
+                # Score!
+                owner = players.get(shot['owner'])
+                if owner:
+                    owner['score'] = owner.get('score', 0) + 1
+                to_remove.append(shot)
+    for shot in to_remove:
+        if shot in shots:
+            shots.remove(shot)
 
 def emit_game_state():
     now = time.time()
@@ -103,12 +179,18 @@ def emit_game_state():
         state[sid] = {
             'x': p['x'],
             'y': p['y'],
-            'ghost': ghost_pos
+            'ghost': ghost_pos,
+            'score': p.get('score', 0)
         }
+    # Add shots to state
+    state['shots'] = [
+        {'x': s['x'], 'y': s['y']} for s in shots
+    ]
     socketio.emit('state', state)
 
 def game_state_broadcast_loop():
     while True:
+        update_shots()
         emit_game_state()
         socketio.sleep(GAMESTATE_EMIT_INTERVAL)
 
@@ -123,7 +205,8 @@ def start_broadcast_loop():
     players[request.sid] = {
         'x': START_X,
         'y': START_Y,
-        'history': [{'x': START_X, 'y': START_Y, 't': now}]
+        'history': [{'x': START_X, 'y': START_Y, 't': now}],
+        'score': 0
     }
 
 if __name__ == '__main__':

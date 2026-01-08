@@ -19,16 +19,14 @@ h2 {
     display: block;
     margin: 0 auto;
     outline: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 
 p {
     margin-top: 16px;
     color: #444;
     font-size: 1rem;
+    text-align: center;
 }
 
-/* Optional: highlight ghost visually with a drop shadow for clarity */
-.ghost {
-    /* Not used in JS version, but for future CSS-based canvas overlay: */
-    filter: brightness(60%) blur(1px);
-}
+/* Score display above player handled via canvas text drawing */

@@ -149,7 +149,7 @@ if (players[myId]) {
 
 **Summary:**  
 - Limit connections to two players.
-- Implement shooting toward enemy ghost with 'K'.
+- Implement shooting toward enemy ghost with 'k'.
 - Shots are managed and checked for collision server-side.
 - Update and display scores.  
 - Broadcast shots and scores with the game state.

@@ -1,64 +1,60 @@
-To implement mouse aiming (so shots are aimed at the player's mouse position, not auto-aimed at the ghost), follow these steps:
-
-**Files you need to change:**
-- `client/main.js`
-- `server/app.py`
-- `server/shooting.py`
-
-**Steps:**
-
-1. **Client-side updates (`client/main.js`):**
-
-   - **Track mouse position:**  
-     Listen for mouse movement over the canvas and record the mouse coordinates relative to the game box.
-
-   - **Send mouse position on shoot:**  
-     When the player shoots (e.g., presses 'K' or clicks), emit the `shoot` event to the server with the current mouse coordinates:
-     ```js
-     socket.emit('shoot', { x: mouseX, y: mouseY });
-     ```
-     (You’ll need to maintain and update `mouseX`, `mouseY` as the mouse moves.)
-
-2. **Server handler update (`server/app.py`):**
-
-   - **Update shoot event:**  
-     Modify the `@socketio.on('shoot')` handler to accept the target mouse coordinates from the client:
-     ```python
-     @socketio.on('shoot')
-     def on_shoot(data):
-         ...
-         handle_shoot(players, shots, request.sid, data)
-     ```
-     Pass the mouse coordinates (`data['x']`, `data['y']`) to the shooting logic.
-
-3. **Shooting logic update (`server/shooting.py`):**
-
-   - **Update `handle_shoot`:**  
-     Change the function signature to accept mouse coordinates:  
-     ```python
-     def handle_shoot(players, shots, shooter_sid, data):
-     ```
-     Use the passed-in mouse coordinates to set the shot’s direction from the player to the aimed position, instead of auto-targeting the nearest ghost.
-
-     Example:
-     ```python
-     dx = data['x'] - shooter['x']
-     dy = data['y'] - shooter['y']
-     dist = math.hypot(dx, dy)
-     vx = dx / dist * SHOT_SPEED
-     vy = dy / dist * SHOT_SPEED
-     # create the shot using vx, vy
-     ```
-
-4. **Ghost mechanic:**  
-   Leave the ghost/collision logic unchanged: shots still collide with the delayed (ghost) position of players.
+To make the scroll wheel more sensitive (so the user can adjust the ghost delay more per scroll), but **limit the maximum rate at which the server actually changes the delay**, follow these steps:
 
 ---
 
-**Summary:**  
-- Add mouse tracking and send mouse coordinates with shoot events (`client/main.js`)
-- Update the shoot event handler to accept/forward coordinates (`server/app.py`)
-- Use mouse coordinates as the shot’s target in `handle_shoot` (`server/shooting.py`)
-- No changes to `server/ghost.py` are needed.
+**1. Client-side: Make scroll wheel more sensitive**
 
-This will result in shots firing toward where the mouse was aimed when shooting, instead of auto-aiming at the ghost.
+- In `client/main.js`, increase the amount of scroll events generated per scroll (browser-dependent), or, more simply, **send a delay change request with a larger magnitude per scroll**:
+    ```js
+    // When wheel event is detected:
+    let scrollAmount = e.deltaY < 0 ? 1 : -1; // Or use e.deltaY directly for more sensitivity
+    socket.emit('delay_change', { amount: scrollAmount });
+    ```
+    You could also send a value proportional to `e.deltaY` for even more control.
+
+---
+
+**2. Server-side: Throttle/max-rate state change**
+
+- In `server/app.py`, instead of immediately increasing/decreasing the delay on every scroll event, introduce a **rate limiter** per player for how quickly their delay can change, e.g. by processing requests but only applying at most X delay units per second.
+
+Example implementation:
+
+```python
+DELAY_MAX_CHANGE_PER_SEC = 0.07  # max allowed change per second
+
+@socketio.on('delay_change')
+def handle_delay_change(data):
+    p = players.get(request.sid)
+    if not p:
+        return
+    now = time.time()
+    last_change = p.get('last_delay_change', now)
+    since = now - last_change
+    # Compute the max allowed change in this interval
+    max_change = DELAY_MAX_CHANGE_PER_SEC * since
+    requested = float(data.get('amount', 0)) * DELAY_CHANGE_RATE
+    # Clamp to max_change
+    applied = max(-max_change, min(requested, max_change))
+    new_delay = p.get('delay', DEFAULT_GHOST_DELAY) + applied
+    p['delay'] = max(MIN_GHOST_DELAY, min(MAX_GHOST_DELAY, new_delay))
+    p['last_delay_change'] = now
+```
+
+**Replace your old `delay_inc`/`delay_dec` handlers with a single `delay_change` event as above.**
+
+---
+
+**Summary**
+
+- The client can scroll as fast/hard as it likes to request delay changes (even sending large values).
+- The server only allows the player's delay value to change by at most a fixed rate per second, regardless of scroll speed or amount.
+- This ensures sensitivity on the client, but smooth, rate-limited state on the server.
+
+---
+
+**Files to update:**
+- `client/main.js`: emit `delay_change` with desired amount (possibly proportional to scroll)
+- `server/app.py`: implement the rate-limited `delay_change` handler as above
+
+No changes are needed for ghost, movement, or shooting logic.

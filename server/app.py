@@ -16,7 +16,8 @@ MOVE_AMOUNT = 3
 START_X = BOX_WIDTH // 2
 START_Y = BOX_HEIGHT // 2
 
-DELAY_CHANGE_RATE = 0.0175
+DELAY_CHANGE_RATE = 0.1
+DELAY_MAX_CHANGE_PER_SEC = 0.2  # server-side max change rate per second
 
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60
 SHOOT_COOLDOWN = 1.0
@@ -44,10 +45,9 @@ def on_connect():
         'history': [{'x': START_X, 'y': START_Y, 't': now}],
         'score': 0,
         'delay': DEFAULT_GHOST_DELAY,
-        'delay_inc': False,
-        'delay_dec': False,
+        'last_delay_change': now,
+        'move': get_blank_move_state(),
         'last_shot': 0,
-        'move': get_blank_move_state()
     }
     # Start background thread once
     global broadcast_thread
@@ -82,17 +82,23 @@ def on_shoot(data):
     handle_shoot(players, shots, request.sid, data)
 
 # --- Mouse wheel for delay increase/decrease ---
-@socketio.on('delay_inc')
-def handle_delay_inc():
+@socketio.on('delay_change')
+def handle_delay_change(data):
     p = players.get(request.sid)
-    if p:
-        p['delay'] = min(MAX_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) + DELAY_CHANGE_RATE)
-
-@socketio.on('delay_dec')
-def handle_delay_dec():
-    p = players.get(request.sid)
-    if p:
-        p['delay'] = max(MIN_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) - DELAY_CHANGE_RATE)
+    if not p:
+        return
+    now = time.time()
+    last_change = p.get('last_delay_change', now)
+    since = now - last_change
+    max_change = DELAY_MAX_CHANGE_PER_SEC * since
+    try:
+        requested_amount = float(data.get('amount', 0)) * DELAY_CHANGE_RATE
+    except Exception:
+        requested_amount = 0
+    applied = max(-max_change, min(requested_amount, max_change))
+    new_delay = p.get('delay', DEFAULT_GHOST_DELAY) + applied
+    p['delay'] = max(MIN_GHOST_DELAY, min(MAX_GHOST_DELAY, new_delay))
+    p['last_delay_change'] = now
 
 @socketio.on('disconnect')
 def on_disconnect():

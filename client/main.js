@@ -97,16 +97,15 @@ canvas.addEventListener('mousedown', function(e) {
     }
 });
 
-// --- Mouse wheel for delay add/reduce ---
+// --- More sensitive Mouse wheel for delay add/reduce ---
+// This version emits a value proportional to the scroll for finer control.
+// The server enforces a max change rate.
 canvas.addEventListener('wheel', function(e) {
-    if (e.deltaY < 0) {
-        // Scroll up: increase delay
-        socket.emit('delay_inc');
-    } else if (e.deltaY > 0) {
-        // Scroll down: decrease delay
-        socket.emit('delay_dec');
-    }
-    // Prevent page scroll
+    if (e.deltaY === 0) return;
+    // Usually e.deltaY is ~100 per notch; scale it so 1 notch = ±1
+    // Negative = scroll up (increase), positive = scroll down (decrease)
+    const amount = -e.deltaY / 100;
+    socket.emit('delay_change', { amount });
     e.preventDefault();
 }, { passive: false });
 

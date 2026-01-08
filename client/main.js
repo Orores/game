@@ -6,17 +6,16 @@ const ctx = canvas.getContext('2d');
 const PLAYER_RADIUS = 20;
 const BOX_WIDTH = 500;
 const BOX_HEIGHT = 500;
-const GHOST_ALPHA = 0.4; // Transparency for ghost
+const GHOST_ALPHA = 0.4;
 const SHOT_RADIUS = 5;
 
 let myId = null;
-let players = {}; // { socketId: {x, y, ghost: {x, y}, delay: number} }
-let shots = [];   // [{x, y}]
-let moveX = 0;
-let moveY = 0;
+let players = {};
+let shots = [];
+let moving = { left: false, right: false, up: false, down: false };
 
 // --- delay mechanic vars ---
-let currentDelay = 0.5; // will be set from server state
+let currentDelay = 0.5;
 let delayInc = false;
 let delayDec = false;
 
@@ -25,14 +24,12 @@ const socket = io();
 
 // Listen for state updates from the server (sent continuously)
 socket.on('state', (data) => {
-    // shots array is inside data.shots, others are player data
     shots = data.shots || [];
     delete data.shots;
     players = data;
     if (!myId) {
         myId = socket.id;
     }
-    // Update my delay for display
     if (players[myId] && typeof players[myId].delay === "number") {
         currentDelay = players[myId].delay;
     }
@@ -40,20 +37,29 @@ socket.on('state', (data) => {
     updateDelayDisplay();
 });
 
-// Handle keyboard input for continuous movement and delay change
+// Movement helpers
+function emitMoveState(dir, state) {
+    if (state) {
+        socket.emit('move_start', { dir });
+    } else {
+        socket.emit('move_stop', { dir });
+    }
+}
+
+// Handle keyboard input for movement and delay change
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
         case 'KeyA':
-            moveX = -1;
+            if (!moving.left) { moving.left = true; emitMoveState('left', true); }
             break;
         case 'KeyD':
-            moveX = 1;
+            if (!moving.right) { moving.right = true; emitMoveState('right', true); }
             break;
         case 'KeyW':
-            moveY = -1;
+            if (!moving.up) { moving.up = true; emitMoveState('up', true); }
             break;
         case 'KeyS':
-            moveY = 1;
+            if (!moving.down) { moving.down = true; emitMoveState('down', true); }
             break;
         case 'KeyK':
             socket.emit('shoot');
@@ -76,16 +82,16 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
     switch (e.code) {
         case 'KeyA':
-            if (moveX === -1) moveX = 0;
+            if (moving.left) { moving.left = false; emitMoveState('left', false); }
             break;
         case 'KeyD':
-            if (moveX === 1) moveX = 0;
+            if (moving.right) { moving.right = false; emitMoveState('right', false); }
             break;
         case 'KeyW':
-            if (moveY === -1) moveY = 0;
+            if (moving.up) { moving.up = false; emitMoveState('up', false); }
             break;
         case 'KeyS':
-            if (moveY === 1) moveY = 0;
+            if (moving.down) { moving.down = false; emitMoveState('down', false); }
             break;
         case 'KeyL':
             if (delayInc) {
@@ -101,14 +107,6 @@ document.addEventListener('keyup', (e) => {
             break;
     }
 });
-
-// Send move request to server on each animation frame
-function movementLoop() {
-    if (moveX !== 0 || moveY !== 0) {
-        socket.emit('move', { dx: moveX, dy: moveY });
-    }
-    requestAnimationFrame(movementLoop);
-}
 
 // Draw the game box, all players, their ghosts, and shots
 function draw() {
@@ -172,8 +170,5 @@ function updateDelayDisplay() {
 
 // Initial draw
 draw();
-
-// Start movement loop
-movementLoop();
 
 canvas.focus();

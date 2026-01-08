@@ -8,5 +8,7 @@ I am programming a web based game using python flask and sockets.
 6. Theres a ghost with delay.
 7. Continous emission loop
 8. variable ghost delay.
+9. server state side.
 
-limit shooting sped to one per second, even if shooting key is held down.
+instead of autoaim for the ghost i want mouse aim. How woudl i go about implimenteing that?
+what files do i need to change?

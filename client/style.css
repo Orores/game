@@ -37,4 +37,5 @@ p {
     text-align: center;
 }
 
+/* No client-side movement loop needed; movement is managed by discrete key events sent to the server. */
 /* Score display above player handled via canvas text drawing */

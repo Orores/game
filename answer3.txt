@@ -1,69 +1,64 @@
-Yes, it is possible (and good practice) to offload the ghost delay mechanics to a separate file, just like you did for shooting mechanics with `server/shooting.py`. This makes your codebase cleaner and easier to maintain.
+To implement mouse aiming (so shots are aimed at the player's mouse position, not auto-aimed at the ghost), follow these steps:
+
+**Files you need to change:**
+- `client/main.js`
+- `server/app.py`
+- `server/shooting.py`
+
+**Steps:**
+
+1. **Client-side updates (`client/main.js`):**
+
+   - **Track mouse position:**  
+     Listen for mouse movement over the canvas and record the mouse coordinates relative to the game box.
+
+   - **Send mouse position on shoot:**  
+     When the player shoots (e.g., presses 'K' or clicks), emit the `shoot` event to the server with the current mouse coordinates:
+     ```js
+     socket.emit('shoot', { x: mouseX, y: mouseY });
+     ```
+     (You’ll need to maintain and update `mouseX`, `mouseY` as the mouse moves.)
+
+2. **Server handler update (`server/app.py`):**
+
+   - **Update shoot event:**  
+     Modify the `@socketio.on('shoot')` handler to accept the target mouse coordinates from the client:
+     ```python
+     @socketio.on('shoot')
+     def on_shoot(data):
+         ...
+         handle_shoot(players, shots, request.sid, data)
+     ```
+     Pass the mouse coordinates (`data['x']`, `data['y']`) to the shooting logic.
+
+3. **Shooting logic update (`server/shooting.py`):**
+
+   - **Update `handle_shoot`:**  
+     Change the function signature to accept mouse coordinates:  
+     ```python
+     def handle_shoot(players, shots, shooter_sid, data):
+     ```
+     Use the passed-in mouse coordinates to set the shot’s direction from the player to the aimed position, instead of auto-targeting the nearest ghost.
+
+     Example:
+     ```python
+     dx = data['x'] - shooter['x']
+     dy = data['y'] - shooter['y']
+     dist = math.hypot(dx, dy)
+     vx = dx / dist * SHOT_SPEED
+     vy = dy / dist * SHOT_SPEED
+     # create the shot using vx, vy
+     ```
+
+4. **Ghost mechanic:**  
+   Leave the ghost/collision logic unchanged: shots still collide with the delayed (ghost) position of players.
 
 ---
 
-**How to Separate Ghost Delay Mechanics:**
+**Summary:**  
+- Add mouse tracking and send mouse coordinates with shoot events (`client/main.js`)
+- Update the shoot event handler to accept/forward coordinates (`server/app.py`)
+- Use mouse coordinates as the shot’s target in `handle_shoot` (`server/shooting.py`)
+- No changes to `server/ghost.py` are needed.
 
-1. **Create a New File for Ghosts**
-
-Create a file called `server/ghosts.py`.
-
-2. **Move Delay/History Functions There**
-
-Move all functions related to ghost delay and history calculations into this file. For example, move `prune_history` and `get_ghost_position` to `ghosts.py`:
-
-```python
-# server/ghosts.py
-
-def prune_history(history, now, max_age):
-    return [h for h in history if now - h['t'] <= max_age]
-
-def get_ghost_position(history, now, delay):
-    target_time = now - delay
-    if not history:
-        return None
-    h1, h2 = None, None
-    for i in range(len(history) - 1):
-        if history[i]['t'] <= target_time <= history[i+1]['t']:
-            h1 = history[i]
-            h2 = history[i+1]
-            break
-    if h1 and h2:
-        t1, t2 = h1['t'], h2['t']
-        ratio = (target_time - t1) / (t2 - t1) if t2 != t1 else 0
-        x = h1['x'] + (h2['x'] - h1['x']) * ratio
-        y = h1['y'] + (h2['y'] - h1['y']) * ratio
-        return {'x': x, 'y': y}
-    elif target_time <= history[0]['t']:
-        return {'x': history[0]['x'], 'y': history[0]['y']}
-    else:
-        return {'x': history[-1]['x'], 'y': history[-1]['y']}
-```
-
-3. **Import and Use in app.py (and shooting.py if needed)**
-
-In your `server/app.py` (and `server/shooting.py` if it needs ghost positions), import these functions:
-
-```python
-from server.ghosts import get_ghost_position, prune_history
-```
-
-Replace any copies of these functions in your codebase with calls to the imported ones.
-
-4. **Update All Calls**
-
-Wherever you were previously calling the local `get_ghost_position` or `prune_history`, use the imported versions. This centralizes any tweaks to ghost logic.
-
----
-
-**Summary:**
-
-- Move ghost delay/history logic to `server/ghosts.py`
-- Import and use those functions from that module everywhere in your backend where ghost mechanics are needed
-
-This will make your architecture modular:  
-- `server/shooting.py` for shooting logic  
-- `server/ghosts.py` for ghost mechanics (delay, history)  
-- `server/app.py` for main app logic
-
-This approach is recommended for larger projects and reduces duplicated logic.
+This will result in shots firing toward where the mouse was aimed when shooting, instead of auto-aiming at the ghost.

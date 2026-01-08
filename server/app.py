@@ -1,17 +1,15 @@
 from flask import Flask, send_from_directory, request
 from flask_socketio import SocketIO, emit
 import time
+import threading
 
-from server.shooting import handle_shoot, update_shots  # Import shooting logic
+from server.shooting import handle_shoot, update_shots
 from server.ghost import get_ghost_position, prune_history, DEFAULT_GHOST_DELAY, MIN_GHOST_DELAY, MAX_GHOST_DELAY
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Game state: mapping of session IDs to player info
-players = {}
-shots = []
-
+# Game constants
 BOX_WIDTH = 500
 BOX_HEIGHT = 500
 PLAYER_RADIUS = 20
@@ -19,10 +17,20 @@ MOVE_AMOUNT = 3
 START_X = BOX_WIDTH // 2
 START_Y = BOX_HEIGHT // 2
 
-DELAY_CHANGE_RATE = 0.0175  # how much to change per event
+DELAY_CHANGE_RATE = 0.0175
 
-GAMESTATE_EMIT_INTERVAL = 1.0 / 60  # 60 FPS
-SHOOT_COOLDOWN = 1.0  # seconds between shots
+GAMESTATE_EMIT_INTERVAL = 1.0 / 60
+SHOOT_COOLDOWN = 1.0
+
+# Server-side game state
+players = {}
+shots = []
+
+# --- Movement state for each player (server authoritative) ---
+# For each player: {'move': {'up': False, 'down': False, 'left': False, 'right': False}}
+
+def get_blank_move_state():
+    return {'left': False, 'right': False, 'up': False, 'down': False}
 
 @app.route('/')
 def index():
@@ -43,35 +51,28 @@ def on_connect():
         'delay': DEFAULT_GHOST_DELAY,
         'delay_inc': False,
         'delay_dec': False,
-        'last_shot': 0,  # For cooldown
+        'last_shot': 0,
+        'move': get_blank_move_state()
     }
     # Start background thread once
     global broadcast_thread
     if not hasattr(on_connect, "broadcast_thread"):
         on_connect.broadcast_thread = socketio.start_background_task(game_state_broadcast_loop)
 
-@socketio.on('move')
-def handle_move(data):
-    dx = data.get('dx', 0)
-    dy = data.get('dy', 0)
-    now = time.time()
+# --- Movement handler: update server-side movement state ---
+@socketio.on('move_start')
+def handle_move_start(data):
+    direction = data.get('dir')
     p = players.get(request.sid)
-    if not p:
-        return
-    x = p['x'] + dx * MOVE_AMOUNT
-    y = p['y'] + dy * MOVE_AMOUNT
-    # Clamp to boundaries
-    x = max(PLAYER_RADIUS, min(BOX_WIDTH - PLAYER_RADIUS, x))
-    y = max(PLAYER_RADIUS, min(BOX_HEIGHT - PLAYER_RADIUS, y))
-    # Update player state and history
-    p['x'] = x
-    p['y'] = y
-    if 'history' not in p:
-        p['history'] = []
-    p['history'].append({'x': x, 'y': y, 't': now})
-    max_player_delay = p.get('delay', DEFAULT_GHOST_DELAY)
-    max_age = max(MAX_GHOST_DELAY, max_player_delay) + 0.5
-    p['history'] = prune_history(p['history'], now, max_age)
+    if p and direction in p['move']:
+        p['move'][direction] = True
+
+@socketio.on('move_stop')
+def handle_move_stop(data):
+    direction = data.get('dir')
+    p = players.get(request.sid)
+    if p and direction in p['move']:
+        p['move'][direction] = False
 
 @socketio.on('shoot')
 def on_shoot():
@@ -79,14 +80,12 @@ def on_shoot():
     now = time.time()
     if not p:
         return
-    # Limit shooting speed: only 1 shot per second
     if now - p.get('last_shot', 0) < SHOOT_COOLDOWN:
         return
     p['last_shot'] = now
     handle_shoot(players, shots, request.sid)
 
 # --- Continuous delay change support ---
-
 @socketio.on('delay_inc_start')
 def handle_delay_inc_start():
     p = players.get(request.sid)
@@ -117,6 +116,38 @@ def on_disconnect():
     global shots
     shots = [shot for shot in shots if shot['owner'] != request.sid and shot['target_sid'] != request.sid]
 
+def clamp(val, minv, maxv):
+    return max(minv, min(maxv, val))
+
+def update_player_positions():
+    now = time.time()
+    for p in players.values():
+        dx = 0
+        dy = 0
+        move = p['move']
+        if move.get('left'):  dx -= 1
+        if move.get('right'): dx += 1
+        if move.get('up'):    dy -= 1
+        if move.get('down'):  dy += 1
+        # Normalize diagonal
+        if dx != 0 and dy != 0:
+            length = (dx ** 2 + dy ** 2) ** 0.5
+            dx /= length
+            dy /= length
+        new_x = p['x'] + dx * MOVE_AMOUNT
+        new_y = p['y'] + dy * MOVE_AMOUNT
+        new_x = clamp(new_x, PLAYER_RADIUS, BOX_WIDTH - PLAYER_RADIUS)
+        new_y = clamp(new_y, PLAYER_RADIUS, BOX_HEIGHT - PLAYER_RADIUS)
+        if new_x != p['x'] or new_y != p['y']:
+            p['x'] = new_x
+            p['y'] = new_y
+            if 'history' not in p:
+                p['history'] = []
+            p['history'].append({'x': new_x, 'y': new_y, 't': now})
+            max_player_delay = p.get('delay', DEFAULT_GHOST_DELAY)
+            max_age = max(MAX_GHOST_DELAY, max_player_delay) + 0.5
+            p['history'] = prune_history(p['history'], now, max_age)
+
 def emit_game_state():
     now = time.time()
     state = {}
@@ -135,17 +166,15 @@ def emit_game_state():
     socketio.emit('state', state)
 
 def process_delays():
-    # Called every frame in game_state_broadcast_loop
     for p in players.values():
-        # Increment delay
         if p.get('delay_inc'):
             p['delay'] = min(MAX_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) + DELAY_CHANGE_RATE)
-        # Decrement delay
         if p.get('delay_dec'):
             p['delay'] = max(MIN_GHOST_DELAY, p.get('delay', DEFAULT_GHOST_DELAY) - DELAY_CHANGE_RATE)
 
 def game_state_broadcast_loop():
     while True:
+        update_player_positions()
         process_delays()
         update_shots(players, shots)
         emit_game_state()

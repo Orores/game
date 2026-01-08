@@ -13,8 +13,8 @@ let myId = null;
 let players = {};
 let shots = [];
 let moving = { left: false, right: false, up: false, down: false };
+let delayMoving = { up: false, down: false }; // Space = up (increase), Middle mouse = down (decrease)
 
-// --- delay mechanic vars ---
 let currentDelay = 0.5;
 
 // Mouse position relative to canvas
@@ -48,8 +48,18 @@ function emitMoveState(dir, state) {
     }
 }
 
-// Handle keyboard input for movement
+// Delay helpers (for ghost delay control)
+function emitDelayState(dir, state) {
+    if (state) {
+        socket.emit('delay_start', { dir });
+    } else {
+        socket.emit('delay_stop', { dir });
+    }
+}
+
+// Handle keyboard input for movement and delay
 document.addEventListener('keydown', (e) => {
+    // Movement
     switch (e.code) {
         case 'KeyA':
             if (!moving.left) { moving.left = true; emitMoveState('left', true); }
@@ -64,9 +74,16 @@ document.addEventListener('keydown', (e) => {
             if (!moving.down) { moving.down = true; emitMoveState('down', true); }
             break;
     }
+
+    // Delay control: Space for delay up
+    if (e.code === 'Space') {
+        if (!delayMoving.up) { delayMoving.up = true; emitDelayState('up', true); }
+        e.preventDefault();
+    }
 });
 
 document.addEventListener('keyup', (e) => {
+    // Movement
     switch (e.code) {
         case 'KeyA':
             if (moving.left) { moving.left = false; emitMoveState('left', false); }
@@ -81,6 +98,12 @@ document.addEventListener('keyup', (e) => {
             if (moving.down) { moving.down = false; emitMoveState('down', false); }
             break;
     }
+
+    // Delay control: Space for delay up
+    if (e.code === 'Space') {
+        if (delayMoving.up) { delayMoving.up = false; emitDelayState('up', false); }
+        e.preventDefault();
+    }
 });
 
 // --- Mouse targeting & shooting ---
@@ -92,22 +115,35 @@ canvas.addEventListener('mousemove', function(e) {
 
 // Shoot on left mouse button
 canvas.addEventListener('mousedown', function(e) {
+    // e.button: 0=left, 1=middle, 2=right
     if (e.button === 0) {
         socket.emit('shoot', { x: mouseX, y: mouseY });
     }
+    // Middle mouse button for delay down
+    if (e.button === 1) {
+        if (!delayMoving.down) {
+            delayMoving.down = true;
+            emitDelayState('down', true);
+        }
+        e.preventDefault();
+    }
 });
 
-// --- More sensitive Mouse wheel for delay add/reduce ---
-// This version emits a value proportional to the scroll for finer control.
-// The server enforces a max change rate.
-canvas.addEventListener('wheel', function(e) {
-    if (e.deltaY === 0) return;
-    // Usually e.deltaY is ~100 per notch; scale it so 1 notch = ±1
-    // Negative = scroll up (increase), positive = scroll down (decrease)
-    const amount = -e.deltaY / 100;
-    socket.emit('delay_change', { amount });
+// Release middle mouse button for delay down
+canvas.addEventListener('mouseup', function(e) {
+    if (e.button === 1) {
+        if (delayMoving.down) {
+            delayMoving.down = false;
+            emitDelayState('down', false);
+        }
+        e.preventDefault();
+    }
+});
+
+// Prevent context menu on canvas for middle/right click
+canvas.addEventListener('contextmenu', function(e) {
     e.preventDefault();
-}, { passive: false });
+});
 
 // Draw the game box, all players, their ghosts, and shots
 function draw() {
@@ -166,7 +202,7 @@ function updateDelayDisplay() {
         delayDiv.style.textAlign = 'center';
         document.body.insertBefore(delayDiv, document.body.children[1]);
     }
-    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (Scroll up/down to change)`;
+    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (Hold SPACE = up, Hold MIDDLE MOUSE = down)`;
 }
 
 // Initial draw

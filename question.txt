@@ -10,4 +10,4 @@ I am programming a web based game using python flask and sockets.
 8. variable ghost delay.
 9. server state side.
 
-add more sensitive scroll change but server side maximu mchange rate.
+update the shooting mechanic so it also part of the action stack liek movement.

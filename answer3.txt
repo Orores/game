@@ -1,60 +1,76 @@
-To make the scroll wheel more sensitive (so the user can adjust the ghost delay more per scroll), but **limit the maximum rate at which the server actually changes the delay**, follow these steps:
+To make shooting part of the "ghost action" (i.e., delayed and replayed as if occurring from the ghost's perspective):
 
 ---
 
-**1. Client-side: Make scroll wheel more sensitive**
+**Design:**
 
-- In `client/main.js`, increase the amount of scroll events generated per scroll (browser-dependent), or, more simply, **send a delay change request with a larger magnitude per scroll**:
-    ```js
-    // When wheel event is detected:
-    let scrollAmount = e.deltaY < 0 ? 1 : -1; // Or use e.deltaY directly for more sensitivity
-    socket.emit('delay_change', { amount: scrollAmount });
-    ```
-    You could also send a value proportional to `e.deltaY` for even more control.
+- Instead of executing the shot immediately when the player clicks, record the shot (with its targeting info) along with a timestamp into the player's action history.
+- When computing the ghost state for a player (which is already delayed by `ghost_delay`), process all actions—including shooting—that occurred up to the ghost's "present" (delayed) time.
+- Shots are created from the ghost's historical position and direction, not from the player's current position.
 
 ---
 
-**2. Server-side: Throttle/max-rate state change**
+**Implementation Plan:**
 
-- In `server/app.py`, instead of immediately increasing/decreasing the delay on every scroll event, introduce a **rate limiter** per player for how quickly their delay can change, e.g. by processing requests but only applying at most X delay units per second.
+1. **Extend Player History to Include Actions**
+    - Each history entry should include not just position, but also any discrete actions (shoot, etc.) taken at that moment:
+      ```python
+      # Example player history entry:
+      {'x': ..., 'y': ..., 't': ..., 'action': None}
+      {'x': ..., 'y': ..., 't': ..., 'action': {'type': 'shoot', 'target': (mx, my)}}
+      ```
+    - On each tick or input event, when a shot is fired, append an action to the history.
 
-Example implementation:
+2. **Server: Delayed Action Processing for Ghost**
+    - When updating the ghost state for a player (at `now - delay`), also process any actions in history up to that time, and execute them from the ghost's perspective.
+    - Specifically for shooting:
+      - When the ghost's timeline reaches a 'shoot' action in its history, spawn a shot at the ghost's position (not the player's current real position) and in the target direction as it was originally input.
 
-```python
-DELAY_MAX_CHANGE_PER_SEC = 0.07  # max allowed change per second
+3. **Shooting Logic Update**
+    - When a player requests to shoot (client emits 'shoot'):
+        - Instead of immediately spawning a shot, record the shoot action (with timestamp and targeting) into the player's history.
+        - Mark it as an action. This can be done by adding an `'action'` field to the next history entry (or the current one if movement and shot are simultaneous).
+    - In the server's ghost-processing code (e.g., in your ghost position interpolation), look for any unprocessed actions in the delayed window and execute them, such as spawning a shot from the ghost's delayed position.
 
-@socketio.on('delay_change')
-def handle_delay_change(data):
-    p = players.get(request.sid)
-    if not p:
-        return
-    now = time.time()
-    last_change = p.get('last_delay_change', now)
-    since = now - last_change
-    # Compute the max allowed change in this interval
-    max_change = DELAY_MAX_CHANGE_PER_SEC * since
-    requested = float(data.get('amount', 0)) * DELAY_CHANGE_RATE
-    # Clamp to max_change
-    applied = max(-max_change, min(requested, max_change))
-    new_delay = p.get('delay', DEFAULT_GHOST_DELAY) + applied
-    p['delay'] = max(MIN_GHOST_DELAY, min(MAX_GHOST_DELAY, new_delay))
-    p['last_delay_change'] = now
-```
+4. **Shot Ownership**
+    - Shots spawned in this way should be marked as from the ghost's position and time, and their owner should still be the original player.
 
-**Replace your old `delay_inc`/`delay_dec` handlers with a single `delay_change` event as above.**
-
----
-
-**Summary**
-
-- The client can scroll as fast/hard as it likes to request delay changes (even sending large values).
-- The server only allows the player's delay value to change by at most a fixed rate per second, regardless of scroll speed or amount.
-- This ensures sensitivity on the client, but smooth, rate-limited state on the server.
+5. **Collision Handling**
+    - Collision detection should already be based on ghost positions, so no changes needed.
 
 ---
 
-**Files to update:**
-- `client/main.js`: emit `delay_change` with desired amount (possibly proportional to scroll)
-- `server/app.py`: implement the rate-limited `delay_change` handler as above
+**Key Code Changes:**
 
-No changes are needed for ghost, movement, or shooting logic.
+- **Shooting Event:**
+    - Instead of immediately calling `handle_shoot`, do:
+      ```python
+      # On 'shoot' event:
+      now = time.time()
+      p = players.get(request.sid)
+      p['history'].append({'x': p['x'], 'y': p['y'], 't': now, 'action': {'type': 'shoot', 'target': (mx, my)}})
+      ```
+- **Ghost Processing:**
+    - When processing ghost state at delayed time, check for any 'shoot' actions at or before that time and, if not already processed, spawn a shot from the interpolated ghost position.
+
+- **Prevent Double-Firing:**
+    - Mark actions as "fired" (e.g., with a flag) so they're not repeatedly processed on every tick.
+
+---
+
+**Summary:**
+
+- Shooting is now just another action in the player's history, like movement.
+- The server processes all actions (including shooting) according to each player's delayed (ghost) timeline.
+- Shots originate from where the player’s ghost was and in the direction they were aiming at the time, maintaining fairness and making all actions consistently delayed.
+
+---
+
+**Files to update:**  
+- `server/app.py` (player history, shoot event, ghost update loop)  
+- `server/shooting.py` (update to support shot origin from ghost timeline and action queue)
+
+---
+
+**Result:**  
+All player actions—including shooting—are executed according to the ghost delay, making the delayed "ghost" the true actor for both movement and shooting.

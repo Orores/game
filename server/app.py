@@ -16,8 +16,8 @@ MOVE_AMOUNT = 3
 START_X = BOX_WIDTH // 2
 START_Y = BOX_HEIGHT // 2
 
-DELAY_CHANGE_RATE = 0.1
-DELAY_MAX_CHANGE_PER_SEC = 0.2  # server-side max change rate per second
+DELAY_CHANGE_RATE = 0.1      # How much delay changes per tick (when key held)
+DELAY_MAX_CHANGE_PER_SEC = 0.5  # Server-side max change rate per second
 
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60
 SHOOT_COOLDOWN = 1.0
@@ -27,6 +27,9 @@ shots = []
 
 def get_blank_move_state():
     return {'left': False, 'right': False, 'up': False, 'down': False}
+
+def get_blank_delay_state():
+    return {'up': False, 'down': False}
 
 @app.route('/')
 def index():
@@ -47,6 +50,7 @@ def on_connect():
         'delay': DEFAULT_GHOST_DELAY,
         'last_delay_change': now,
         'move': get_blank_move_state(),
+        'delay_move': get_blank_delay_state(),
         'last_shot': 0,
     }
     # Start background thread once
@@ -69,6 +73,21 @@ def handle_move_stop(data):
     if p and direction in p['move']:
         p['move'][direction] = False
 
+# --- Delay control handlers: SPACE (up) and middle mouse button (down) ---
+@socketio.on('delay_start')
+def handle_delay_start(data):
+    direction = data.get('dir')
+    p = players.get(request.sid)
+    if p and direction in p['delay_move']:
+        p['delay_move'][direction] = True
+
+@socketio.on('delay_stop')
+def handle_delay_stop(data):
+    direction = data.get('dir')
+    p = players.get(request.sid)
+    if p and direction in p['delay_move']:
+        p['delay_move'][direction] = False
+
 @socketio.on('shoot')
 def on_shoot(data):
     p = players.get(request.sid)
@@ -80,25 +99,6 @@ def on_shoot(data):
     p['last_shot'] = now
     # Expecting {'x': ..., 'y': ...} from client for mouse targeting
     handle_shoot(players, shots, request.sid, data)
-
-# --- Mouse wheel for delay increase/decrease ---
-@socketio.on('delay_change')
-def handle_delay_change(data):
-    p = players.get(request.sid)
-    if not p:
-        return
-    now = time.time()
-    last_change = p.get('last_delay_change', now)
-    since = now - last_change
-    max_change = DELAY_MAX_CHANGE_PER_SEC * since
-    try:
-        requested_amount = float(data.get('amount', 0)) * DELAY_CHANGE_RATE
-    except Exception:
-        requested_amount = 0
-    applied = max(-max_change, min(requested_amount, max_change))
-    new_delay = p.get('delay', DEFAULT_GHOST_DELAY) + applied
-    p['delay'] = max(MIN_GHOST_DELAY, min(MAX_GHOST_DELAY, new_delay))
-    p['last_delay_change'] = now
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -138,6 +138,29 @@ def update_player_positions():
             max_age = max(MAX_GHOST_DELAY, max_player_delay) + 0.5
             p['history'] = prune_history(p['history'], now, max_age)
 
+def update_player_delays():
+    now = time.time()
+    for p in players.values():
+        # Handle delay movement (smooth delay change)
+        delay_move = p.get('delay_move', {})
+        last = p.get('last_delay_change', now)
+        dt = now - last
+        # Clamp how much delay can change per server tick, up to DELAY_MAX_CHANGE_PER_SEC
+        max_change = DELAY_MAX_CHANGE_PER_SEC * dt
+
+        change = 0
+        if delay_move.get('up', False):
+            change += DELAY_CHANGE_RATE
+        if delay_move.get('down', False):
+            change -= DELAY_CHANGE_RATE
+
+        if change != 0:
+            # Clamp to max allowed per tick (for fairness)
+            change = max(-max_change, min(change, max_change))
+            new_delay = p.get('delay', DEFAULT_GHOST_DELAY) + change
+            p['delay'] = max(MIN_GHOST_DELAY, min(MAX_GHOST_DELAY, new_delay))
+        p['last_delay_change'] = now
+
 def emit_game_state():
     now = time.time()
     state = {}
@@ -158,6 +181,7 @@ def emit_game_state():
 def game_state_broadcast_loop():
     while True:
         update_player_positions()
+        update_player_delays()
         update_shots(players, shots)
         emit_game_state()
         socketio.sleep(GAMESTATE_EMIT_INTERVAL)

@@ -3,9 +3,9 @@
 import time
 
 # Ghost delay parameters
-DEFAULT_GHOST_DELAY = 0.5  # seconds (initial delay per player)
-MIN_GHOST_DELAY = 0.1      # minimum value in seconds
-MAX_GHOST_DELAY = 1.0      # maximum value in seconds
+DEFAULT_GHOST_DELAY = 1.0  # seconds (initial delay per player)
+MIN_GHOST_DELAY = 0.5      # minimum value in seconds
+MAX_GHOST_DELAY = 1.5      # maximum value in seconds
 
 def prune_history(history, now, max_age):
     """

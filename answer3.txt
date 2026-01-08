@@ -1,155 +1,96 @@
-To implement the new shooting feature and player limit, make the following changes:
+To implement per-player controllable ghost delay, do the following:
 
-**1. Restrict to Two Players on the Server**
+**1. Store Delay Per Player (Server)**
 
-- In your `server/app.py`, modify the `@socketio.on('connect')` handler:
-  - Before registering a new player, check if `len(players) >= 2`.
-  - If so, reject the connection:
+- In `server/app.py`, when a player connects, add a `delay` field to their data, initialized to 0.5:
 
 ```python
-@socketio.on('connect')
-def handle_connect():
-    if len(players) >= 2:
-        emit('full')
-        return False  # Refuse connection
-    # ... existing code ...
+players[request.sid] = {
+    'x': START_X,
+    'y': START_Y,
+    'history': [{'x': START_X, 'y': START_Y, 't': now}],
+    'score': 0,
+    'delay': 0.5,  # start with 0.5s
+}
 ```
 
-- On the client, listen for the `full` event and show a message or redirect.
+**2. Add Events: Increase/Decrease Delay from Client**
 
----
+- In `server/app.py`, add two new socket handlers:
 
-**2. Shooting Mechanic**
+```python
+@socketio.on('increase_delay')
+def handle_increase_delay():
+    p = players.get(request.sid)
+    if not p:
+        return
+    p['delay'] = min(1.0, p.get('delay', 0.5) + 0.1)
 
-**a. Client Side (client/main.js):**
-- Add a listener for the 'KeyK' press to emit a `shoot` event:
+@socketio.on('decrease_delay')
+def handle_decrease_delay():
+    p = players.get(request.sid)
+    if not p:
+        return
+    p['delay'] = max(0.1, p.get('delay', 0.5) - 0.1)
+```
+
+**3. Use Player’s Own Delay for Ghost (Server)**
+
+- Wherever you call `get_ghost_position` for a player’s *own* ghost (typically for the main player in `emit_game_state`), use their `delay` value instead of a fixed constant:
+  
+```python
+ghost_pos = get_ghost_position(p['history'], now, p.get('delay', 0.5))
+```
+
+- For gameplay/mechanics where you want each player to see their own ghost at their custom delay, always use the individual’s `delay`. For other players’ ghosts, you can also use their delay, or a fixed one (decide as needed for your mechanic).
+
+**4. Expose Delay to the Client**
+
+- When sending game state, include each player's `delay`:
+
+```python
+state[sid] = {
+    'x': p['x'],
+    'y': p['y'],
+    'ghost': ghost_pos,
+    'score': p.get('score', 0),
+    'delay': p.get('delay', 0.5),
+}
+```
+
+**5. Client: Send j/l Key Events to Server**
+
+- In `client/main.js`, listen for `KeyL` and `KeyJ`, and emit to server:
 
 ```js
 document.addEventListener('keydown', (e) => {
-    // ... existing movement keys ...
-    if (e.code === 'KeyK') {
-        socket.emit('shoot');
+    // ... existing code ...
+    if (e.code === 'KeyL') {
+        socket.emit('increase_delay');
+    }
+    if (e.code === 'KeyJ') {
+        socket.emit('decrease_delay');
     }
 });
 ```
 
-**b. Server Side (server/app.py):**
-- Maintain a list of shots, each with position, velocity, and shooter ID.
-- When receiving 'shoot', calculate a vector from the shooter to the nearest enemy ghost (with delay).
-- Add a shot with starting position at the shooter's location, moving toward the ghost.
+**6. (Optional) Show Current Delay**
 
-Example:
-
-```python
-shots = []
-
-@socketio.on('shoot')
-def handle_shoot():
-    shooter = players.get(request.sid)
-    if not shooter:
-        return
-    # Find a target ghost (enemy)
-    for sid, p in players.items():
-        if sid != request.sid:
-            target = get_ghost_position(p['history'], time.time(), GHOST_DELAY)
-            break
-    else:
-        return  # No enemy
-    from math import atan2, cos, sin
-    dx = target['x'] - shooter['x']
-    dy = target['y'] - shooter['y']
-    dist = (dx ** 2 + dy ** 2) ** 0.5
-    if dist == 0:
-        return
-    speed = 6
-    vx = dx / dist * speed
-    vy = dy / dist * speed
-    shots.append({
-        'x': shooter['x'],
-        'y': shooter['y'],
-        'vx': vx,
-        'vy': vy,
-        'owner': request.sid,
-        'target_sid': sid,
-    })
-```
-
-- In your game state emission loop, update shot positions and check collisions with enemy ghosts:
-
-```python
-to_remove = []
-for shot in shots:
-    shot['x'] += shot['vx']
-    shot['y'] += shot['vy']
-    # Check collision with ghost of target
-    target_player = players.get(shot['target_sid'])
-    if target_player:
-        ghost = get_ghost_position(target_player['history'], time.time(), GHOST_DELAY)
-        if ghost:
-            dx = shot['x'] - ghost['x']
-            dy = shot['y'] - ghost['y']
-            if (dx**2 + dy**2) < (PLAYER_RADIUS ** 2):
-                # Score!
-                if 'score' not in players[shot['owner']]:
-                    players[shot['owner']]['score'] = 0
-                players[shot['owner']]['score'] += 1
-                to_remove.append(shot)
-    # Remove shots out of bounds
-    if not (0 <= shot['x'] <= BOX_WIDTH and 0 <= shot['y'] <= BOX_HEIGHT):
-        to_remove.append(shot)
-for shot in to_remove:
-    if shot in shots:
-        shots.remove(shot)
-```
-
-- When emitting game state, include shots and each player's score:
-
-```python
-def emit_game_state():
-    # ... existing code ...
-    state['shots'] = [
-        {'x': s['x'], 'y': s['y']} for s in shots
-    ]
-    for sid, p in players.items():
-        state[sid]['score'] = p.get('score', 0)
-    socketio.emit('state', state)
-```
-
-**c. Client Side: Draw Shots and Show Score**
-
-- In `draw()`, after drawing players, draw all shots as small circles or points.
-- Display the score for the player.
-
-Example (JS):
+- Display the player’s current delay on the screen using the state sent from the server. For example:
 
 ```js
-// Draw shots
-if (players.shots) {
-    for (const shot of players.shots) {
-        ctx.beginPath();
-        ctx.arc(shot.x, shot.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#222';
-        ctx.fill();
-    }
-}
-
-// Show score
 if (players[myId]) {
-    document.getElementById('score').innerText = 'Score: ' + (players[myId].score || 0);
+    document.getElementById('delay').innerText = 'Delay: ' + (players[myId].delay || 0.5).toFixed(2) + 's';
 }
 ```
-
-**d. Add a Score Display Element in HTML:**
-
-```html
-<div id="score">Score: 0</div>
-```
+and add a `<div id="delay"></div>` to your HTML.
 
 ---
 
-**Summary:**  
-- Limit connections to two players.
-- Implement shooting toward enemy ghost with 'k'.
-- Shots are managed and checked for collision server-side.
-- Update and display scores.  
-- Broadcast shots and scores with the game state.
+**Summary:**
+
+- Store individual delay per player on the server.
+- Adjust with j/l keys from the client.
+- Clamp delay between 0.1 and 1.0 seconds.
+- Use the individual delay for their own ghost.
+- Optionally display current delay client-side.

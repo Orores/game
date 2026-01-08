@@ -8,4 +8,4 @@ I am programming a web based game using python flask and sockets.
 6. Theres a ghost with delay.
 7. Continous emission loop
 
-implement the shooritng mechanic. using lowercase k
+add the varaible delay mechanic, the j and l keys aswell as the display for current delay. define also a variable for change rate when it comes to delay.

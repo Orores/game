@@ -1,13 +1,155 @@
-To make the game continuously update on the client side (even without input), you need the server to periodically send updated game states to all connected clients, not just in response to movement inputs. Here’s how you can do it:
+To implement the new shooting feature and player limit, make the following changes:
 
-**1. Add a periodic update loop on the server:**
-Use a background task (for example, with Flask-SocketIO’s `start_background_task` and `socketio.sleep`) to regularly emit the current game state to all clients.
+**1. Restrict to Two Players on the Server**
 
-**2. Remove redundant `emit_game_state()` calls if desired:**  
-You can keep or remove emitting state after every move/disconnect, depending on how responsive you want the game to be.
+- In your `server/app.py`, modify the `@socketio.on('connect')` handler:
+  - Before registering a new player, check if `len(players) >= 2`.
+  - If so, reject the connection:
 
-**3. Client-side:**  
-No changes are needed; the client will now receive regular state updates and redraw even when no input is sent.
+```python
+@socketio.on('connect')
+def handle_connect():
+    if len(players) >= 2:
+        emit('full')
+        return False  # Refuse connection
+    # ... existing code ...
+```
+
+- On the client, listen for the `full` event and show a message or redirect.
+
+---
+
+**2. Shooting Mechanic**
+
+**a. Client Side (client/main.js):**
+- Add a listener for the 'KeyK' press to emit a `shoot` event:
+
+```js
+document.addEventListener('keydown', (e) => {
+    // ... existing movement keys ...
+    if (e.code === 'KeyK') {
+        socket.emit('shoot');
+    }
+});
+```
+
+**b. Server Side (server/app.py):**
+- Maintain a list of shots, each with position, velocity, and shooter ID.
+- When receiving 'shoot', calculate a vector from the shooter to the nearest enemy ghost (with delay).
+- Add a shot with starting position at the shooter's location, moving toward the ghost.
+
+Example:
+
+```python
+shots = []
+
+@socketio.on('shoot')
+def handle_shoot():
+    shooter = players.get(request.sid)
+    if not shooter:
+        return
+    # Find a target ghost (enemy)
+    for sid, p in players.items():
+        if sid != request.sid:
+            target = get_ghost_position(p['history'], time.time(), GHOST_DELAY)
+            break
+    else:
+        return  # No enemy
+    from math import atan2, cos, sin
+    dx = target['x'] - shooter['x']
+    dy = target['y'] - shooter['y']
+    dist = (dx ** 2 + dy ** 2) ** 0.5
+    if dist == 0:
+        return
+    speed = 6
+    vx = dx / dist * speed
+    vy = dy / dist * speed
+    shots.append({
+        'x': shooter['x'],
+        'y': shooter['y'],
+        'vx': vx,
+        'vy': vy,
+        'owner': request.sid,
+        'target_sid': sid,
+    })
+```
+
+- In your game state emission loop, update shot positions and check collisions with enemy ghosts:
+
+```python
+to_remove = []
+for shot in shots:
+    shot['x'] += shot['vx']
+    shot['y'] += shot['vy']
+    # Check collision with ghost of target
+    target_player = players.get(shot['target_sid'])
+    if target_player:
+        ghost = get_ghost_position(target_player['history'], time.time(), GHOST_DELAY)
+        if ghost:
+            dx = shot['x'] - ghost['x']
+            dy = shot['y'] - ghost['y']
+            if (dx**2 + dy**2) < (PLAYER_RADIUS ** 2):
+                # Score!
+                if 'score' not in players[shot['owner']]:
+                    players[shot['owner']]['score'] = 0
+                players[shot['owner']]['score'] += 1
+                to_remove.append(shot)
+    # Remove shots out of bounds
+    if not (0 <= shot['x'] <= BOX_WIDTH and 0 <= shot['y'] <= BOX_HEIGHT):
+        to_remove.append(shot)
+for shot in to_remove:
+    if shot in shots:
+        shots.remove(shot)
+```
+
+- When emitting game state, include shots and each player's score:
+
+```python
+def emit_game_state():
+    # ... existing code ...
+    state['shots'] = [
+        {'x': s['x'], 'y': s['y']} for s in shots
+    ]
+    for sid, p in players.items():
+        state[sid]['score'] = p.get('score', 0)
+    socketio.emit('state', state)
+```
+
+**c. Client Side: Draw Shots and Show Score**
+
+- In `draw()`, after drawing players, draw all shots as small circles or points.
+- Display the score for the player.
+
+Example (JS):
+
+```js
+// Draw shots
+if (players.shots) {
+    for (const shot of players.shots) {
+        ctx.beginPath();
+        ctx.arc(shot.x, shot.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#222';
+        ctx.fill();
+    }
+}
+
+// Show score
+if (players[myId]) {
+    document.getElementById('score').innerText = 'Score: ' + (players[myId].score || 0);
+}
+```
+
+**d. Add a Score Display Element in HTML:**
+
+```html
+<div id="score">Score: 0</div>
+```
+
+---
 
 **Summary:**  
-Add a server-side periodic broadcast of the game state using a background task. This way, clients keep receiving updates and ghost positions move smoothly, even when players aren't pressing keys.
+- Limit connections to two players.
+- Implement shooting toward enemy ghost with 'K'.
+- Shots are managed and checked for collision server-side.
+- Update and display scores.  
+- Broadcast shots and scores with the game state.

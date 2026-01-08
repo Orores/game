@@ -6,5 +6,6 @@ I am programming a web based game using python flask and sockets.
 4. The calculation are done server side
 5. Support multiple player by broadcoasting.
 6. Theres a ghost with delay.
+7. Continous emission loop
 
-nice remove the emit game state and instead use continous emission.
+nice now i want to add a button k for shooting a point towards the enemy location. if that point hits the ghost you get a score +1. Have the server refuse any new player if there are already two. How would i implement that?

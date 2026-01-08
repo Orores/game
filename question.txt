@@ -1,21 +1,36 @@
-I want to programm a game.
+I am programming a web based game using python flask and sockets.
 
-I want to use a socket server,
-all calcualtions are done server side.
-2 player game
-the inputs are send from client to server
-the result is sent from server to client.
-The game shall run through the browser.
+1. I connect to localhost 5000
+2. Theres a box of 500x500 pixels on the screen
+3. I can move left or right using A and D+
+4. The calculation are done server side
 
-I know python. I want to keep it simple. What stack do you suggest to use. What should the repo look like (fodler tree)
+Show me the waterfall diagramm of what events ought to happen so i can prgoramm them in.
 
---
+Implement that using the provided file structure.
 
-Nice then game shall be simple. Up to two clients can connect to server and move a circle using WASD.
+orores@orores-laptop:~/04_latency_game$ python -m server.app
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/orores/04_latency_game/server/app.py", line 7, in <module>
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='asgi')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/flask_socketio/__ini
+t__.py", line 186, in __init__
+    self.init_app(app, **kwargs)
+  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/flask_socketio/__ini
+t__.py", line 242, in init_app
+    self.server = socketio.Server(**self.server_options)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/socketio/base_server
+.py", line 34, in __init__
+    self.eio = self._engineio_server_class()(**engineio_options)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/orores/04_latency_game/venv/lib/python3.12/site-packages/engineio/base_server
+.py", line 94, in __init__
+    raise ValueError('Invalid async_mode specified')
+ValueError: Invalid async_mode specified
+orores@orores-laptop:~/04_latency_game$ 
 
-Explain to me the implementation and what shoudl go into each file.
-Write a list of function and objects.
-
---
-
-nice populate the files now.
+fix the error.

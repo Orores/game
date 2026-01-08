@@ -1,14 +1,3 @@
-```
-Implementation Explanation for 2-Player Circle Movement Game
-
-Overview:
-You will create a simple real-time browser game for 2 players. Both players connect to the server via their browsers. Each controls a circle (using WASD keys). All movement logic is handled server-side using Python. The server sends position updates to clients.
-
-Stack:
-- Backend: Python with Flask + Flask-SocketIO (for real-time WebSocket communication)
-- Frontend: HTML + JavaScript (communicates via WebSockets to receive/send circle positions)
-
-Repo Structure:
 project_root/
 ├── server/
 │   ├── app.py               # Flask/SocketIO server code (Python)
@@ -20,36 +9,3 @@ project_root/
 ├── README.md                # Project documentation
 └── empty.txt                # Placeholder/reference file
 
-File Descriptions:
-- server/app.py: Main server logic. Handles client connections, user input (WASD), updates circle positions, and broadcasts game state to clients.
-- server/requirements.txt: Lists Python dependencies (Flask, Flask-SocketIO, etc.).
-- client/index.html: Renders game area (canvas). Loads JS and CSS.
-- client/main.js: Handles keyboard events, connects to server, sends input events, receives and renders updated positions.
-- client/style.css: Optional styling for the page.
-- README.md: Project description and usage instructions.
-- empty.txt: Reference placeholder.
-
-Key Objects & Functions:
-
-Server (app.py):
-- Player (object): Represents a connected player (id, color, position x/y).
-- players (dict): Stores all connected players.
-- handle_connect(): Registers new client, assigns player object.
-- handle_disconnect(): Removes player on client disconnect.
-- handle_input(data): Receives movement input from client, updates player position.
-- game_loop(): Periodically emits updated positions to all clients.
-
-Client (main.js):
-- socket: SocketIO connection to server.
-- handleKeyDown(event): Sends WASD input to server.
-- handleKeyUp(event): (optional, for smooth movement)
-- renderGame(state): Draws circles at positions received from server.
-
-How it works:
-1. Player opens browser (index.html), JS connects to server via SocketIO.
-2. On keypress (WASD), client sends input to server.
-3. Server updates player position, checks collisions, etc.
-4. Server broadcasts new positions to all clients.
-5. Clients redraw circles in new positions.
-
-This structure keeps game logic on the server and client code minimal and focused on rendering/input.

@@ -1,0 +1,34 @@
+```
+Waterfall Diagram for Web-Based Game (Flask + Sockets):
+
+1. Client connects to server at localhost:5000
+   |
+2. Server creates a new game session and initializes player position
+   |
+3. Server sends initial game state (player position inside 500x500 box) to client
+   |
+4. Client renders the 500x500 box and draws the player at the initial position
+   |
+5. User presses 'A' (move left) or 'D' (move right)
+   |
+6. Client captures the keydown event and sends a movement command to the server via socket
+   |
+7. Server receives the movement command, updates the player's position (ensuring it stays inside the box)
+   |
+8. Server sends the updated game state (new player position) back to the client
+   |
+9. Client receives the updated position and re-renders the player in the new position
+   |
+10. Repeat steps 5-9 as the user continues to play
+
+--------------------------------------------------------------
+
+eventlet in Python:
+Eventlet is a networking library for Python that provides asynchronous I/O using green threads, enabling your Flask server to handle many socket connections concurrently and efficiently. It is often used as the async worker for Flask-SocketIO.
+
+Alternatives to eventlet include:
+- gevent: another greenlet-based async networking library
+- asyncio: Python's standard asynchronous I/O framework (with `async`/`await`)
+- threading: Python's built-in threads (less scalable for network I/O)
+- gunicorn with gevent or eventlet workers (for deployment)
+```

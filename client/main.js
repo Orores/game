@@ -16,8 +16,9 @@ let moveX = 0;
 let moveY = 0;
 
 // --- delay mechanic vars ---
-const DELAY_CHANGE_RATE = 0.1; // must match server/app.py
 let currentDelay = 0.5; // will be set from server state
+let delayInc = false;
+let delayDec = false;
 
 // Connect to the server
 const socket = io('http://localhost:5000');
@@ -39,7 +40,7 @@ socket.on('state', (data) => {
     updateDelayDisplay();
 });
 
-// Handle keyboard input for continuous movement, shooting and delay
+// Handle keyboard input for continuous movement and delay change
 document.addEventListener('keydown', (e) => {
     switch (e.code) {
         case 'KeyA':
@@ -57,11 +58,17 @@ document.addEventListener('keydown', (e) => {
         case 'KeyK':
             socket.emit('shoot');
             break;
-        case 'KeyJ':
-            socket.emit('decrease_delay');
-            break;
         case 'KeyL':
-            socket.emit('increase_delay');
+            if (!delayInc) {
+                delayInc = true;
+                socket.emit('delay_inc_start');
+            }
+            break;
+        case 'KeyJ':
+            if (!delayDec) {
+                delayDec = true;
+                socket.emit('delay_dec_start');
+            }
             break;
     }
 });
@@ -79,6 +86,18 @@ document.addEventListener('keyup', (e) => {
             break;
         case 'KeyS':
             if (moveY === 1) moveY = 0;
+            break;
+        case 'KeyL':
+            if (delayInc) {
+                delayInc = false;
+                socket.emit('delay_inc_stop');
+            }
+            break;
+        case 'KeyJ':
+            if (delayDec) {
+                delayDec = false;
+                socket.emit('delay_dec_stop');
+            }
             break;
     }
 });
@@ -148,7 +167,7 @@ function updateDelayDisplay() {
         delayDiv.style.textAlign = 'center';
         document.body.insertBefore(delayDiv, document.body.children[1]);
     }
-    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(2)}s (J/L to change)`;
+    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (J/L to change)`;
 }
 
 // Initial draw

@@ -2,7 +2,7 @@ I am programming a web based game using python flask and sockets.
 
 1. I connect to localhost 5000
 2. Theres a box of 500x500 pixels on the screen
-3. I can move left or right using A and D+
+3. I can move left or right using A and D W S
 4. The calculation are done server side
 
-make the shape a circle and ad up down movement with W S
+nice now addd multiplayer support.

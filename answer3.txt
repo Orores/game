@@ -1,37 +1,45 @@
 ```
-Waterfall Diagram for Web-Based Game with Flask & Sockets
+Is there currently only support for one player?
 
-Client                               Server
-  |                                     |
-  |------ Connect to ws://:5000 ------->|
-  |                                     |
-  |         (Server initializes         |
-  |          player state, sends x)     |
-  |<------ emit('state', {x}) ----------|
-  |                                     |
-  |  (User presses/holds 'A' or 'D')    |
-  |------ emit('move', {direction})---->|
-  |                                     |
-  |        (Server calculates new x     |
-  |         position, updates state)    |
-  |<------ emit('state', {x}) ----------|
-  |                                     |
-  | (Client updates sprite position)    |
-  |                                     |
-  |------[repeat while key held]--------|
-  |                                     |
-  |------- (disconnect) --------------->|
-  |       (Server cleans up)            |
-  |                                     |
+No, the current implementation in server/app.py supports multiple players simultaneously.
 
-----------------------------------------
-To make movement fluid (not "cutting"):
+Explanation:
 
-- Do not emit 'move' only once per key press.
-- Instead, on the client, when a movement key is held down ('A' or 'D'):
-    - Start a timer/interval (e.g., setInterval in JS) that emits 'move' events repeatedly while the key is held.
-    - Stop emitting when the key is released (onkeyup).
-- Server continues to handle incoming move events and returns updated positions.
-- This creates a continuous, fluid movement as long as the key is held.
+- The server maintains a dictionary called players, where each connected client's session ID (request.sid) is mapped to its own position ({'x': ..., 'y': ...}).
+- When a new client connects, a new entry is created in the players dictionary for that client.
+- When a client moves (presses A or D), only that client's position is updated on the server and sent back to them.
+- When a client disconnects, their entry is removed from the players dictionary.
 
+However, each client only receives their own position from the server; clients are not aware of other players' positions. There is no shared view of all players on the screen. So, while the backend supports multiple simultaneous players, the frontend currently acts as if each player is alone in their own box.
+
+Summary:
+
+- Multiple players can connect and move independently.
+- Each client only sees and controls their own player.
+- There is no visibility of other players in the current implementation.
+
+---
+
+How to Enable Multiple Players to See Each Other
+
+To make all players visible to one another, you need to update both the server and the client:
+
+**Server Side:**
+
+- When sending the game state, emit the positions of all connected players to every client, not just their own position.
+- This means, instead of emitting only `players[request.sid]` after a move or connection, emit the entire `players` dictionary to all connected sockets (using `emit('state', players, broadcast=True)`).
+
+**Client Side:**
+
+- Update the client to expect and process a dictionary of all player positions, not just a single position.
+- Assign a unique color or marker to each player so they can be distinguished.
+- When drawing, loop through all player positions and draw them on the canvas.
+
+**Summary of Steps:**
+
+1. On the server, broadcast the entire game state (all players' positions) after any movement or connection.
+2. On the client, display all player positions received from the server.
+3. Optionally, highlight the current player's own character for clarity.
+
+This way, each player will be able to see not only themselves but also the other players moving in real time within the shared box.
 ```

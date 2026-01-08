@@ -20,7 +20,7 @@ DELAY_CHANGE_RATE = 0.1      # How much delay changes per tick (when key held)
 DELAY_MAX_CHANGE_PER_SEC = 0.5  # Server-side max change rate per second
 
 GAMESTATE_EMIT_INTERVAL = 1.0 / 60
-SHOOT_COOLDOWN = 1.0
+SHOOT_COOLDOWN = 2.0
 
 players = {}
 shots = []

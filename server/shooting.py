@@ -21,9 +21,19 @@ def handle_shoot(players, shots, shooter_sid, data):
     if target_x is None or target_y is None:
         return
 
-    # Calculate direction vector from shooter to mouse position
-    dx = target_x - shooter['x']
-    dy = target_y - shooter['y']
+    now = time.time()
+
+    # Use the shooter's ghost position as the origin of the shot
+    shooter_delay = shooter.get('delay', DEFAULT_GHOST_DELAY)
+    ghost = get_ghost_position(shooter['history'], now, shooter_delay)
+    if ghost is None:
+        return
+    origin_x = ghost['x']
+    origin_y = ghost['y']
+
+    # Calculate direction vector from ghost to mouse position
+    dx = target_x - origin_x
+    dy = target_y - origin_y
     dist = math.hypot(dx, dy)
     if dist == 0:
         return
@@ -31,7 +41,6 @@ def handle_shoot(players, shots, shooter_sid, data):
     vy = dy / dist * SHOT_SPEED
 
     # For collision tracking, choose the closest non-self player (ghost) at shot time
-    now = time.time()
     target_sid = None
     target_ghost = None
     min_dist = None
@@ -39,20 +48,20 @@ def handle_shoot(players, shots, shooter_sid, data):
         if sid == shooter_sid:
             continue
         delay = p.get('delay', DEFAULT_GHOST_DELAY)
-        ghost = get_ghost_position(p['history'], now, delay)
-        if ghost is None:
+        ghost_target = get_ghost_position(p['history'], now, delay)
+        if ghost_target is None:
             continue
-        ghost_dist = math.hypot(ghost['x'] - shooter['x'], ghost['y'] - shooter['y'])
+        ghost_dist = math.hypot(ghost_target['x'] - origin_x, ghost_target['y'] - origin_y)
         if min_dist is None or ghost_dist < min_dist:
             min_dist = ghost_dist
             target_sid = sid
-            target_ghost = ghost
+            target_ghost = ghost_target
     if target_sid is None:
         target_sid = None  # No target, but we still fire the shot
 
     shots.append({
-        'x': shooter['x'],
-        'y': shooter['y'],
+        'x': origin_x,
+        'y': origin_y,
         'vx': vx,
         'vy': vy,
         'owner': shooter_sid,

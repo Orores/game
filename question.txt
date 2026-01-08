@@ -10,4 +10,4 @@ I am programming a web based game using python flask and sockets.
 8. variable ghost delay.
 9. server state side.
 
-update the shooting mechanic so it also part of the action stack liek movement.
+make the shot originate from the ghost. in the idex change the tip that middle mosue and space control delay. remove that tip from the main.js, but keep the delay counter.

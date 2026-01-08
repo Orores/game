@@ -202,7 +202,7 @@ function updateDelayDisplay() {
         delayDiv.style.textAlign = 'center';
         document.body.insertBefore(delayDiv, document.body.children[1]);
     }
-    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s (Hold SPACE = up, Hold MIDDLE MOUSE = down)`;
+    delayDiv.innerText = `Current Ghost Delay: ${currentDelay.toFixed(3)}s`;
 }
 
 // Initial draw

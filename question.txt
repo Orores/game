@@ -4,5 +4,8 @@ I am programming a web based game using python flask and sockets.
 2. Theres a box of 500x500 pixels on the screen
 3. I can move left or right using A and D W S
 4. The calculation are done server side
+5. Support multiple player by broadcoasting.
 
-nice now addd multiplayer support.
+I want to now add a ghost to each player, the ghost does the same movement than a player, but delayed by exactly one second (variable). the shadow of the player has the same color but darker.
+
+How would i implement that?

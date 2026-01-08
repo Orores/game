@@ -7,23 +7,23 @@ const PLAYER_RADIUS = 20;
 const BOX_WIDTH = 500;
 const BOX_HEIGHT = 500;
 
-let playerX = BOX_WIDTH / 2;
-let playerY = BOX_HEIGHT / 2;
+let myId = null;
+let players = {}; // { socketId: {x, y} }
 
 // Movement direction
-let moveX = 0; // -1 for left, 1 for right, 0 for none
-let moveY = 0; // -1 for up, 1 for down, 0 for none
+let moveX = 0;
+let moveY = 0;
 
 // Connect to the server
 const socket = io('http://localhost:5000');
 
 // Listen for state updates from the server
 socket.on('state', (data) => {
-    if (data.x !== undefined && data.y !== undefined) {
-        playerX = data.x;
-        playerY = data.y;
-        draw();
+    players = data;
+    if (!myId) {
+        myId = socket.id;
     }
+    draw();
 });
 
 // Handle keyboard input for continuous movement
@@ -69,7 +69,7 @@ function movementLoop() {
     requestAnimationFrame(movementLoop);
 }
 
-// Draw the game box and player
+// Draw the game box and all players
 function draw() {
     ctx.clearRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
 
@@ -78,11 +78,18 @@ function draw() {
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
 
-    // Draw player as a circle
-    ctx.fillStyle = '#0074D9';
-    ctx.beginPath();
-    ctx.arc(playerX, playerY, PLAYER_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw all players
+    for (const id in players) {
+        const p = players[id];
+        ctx.beginPath();
+        if (id === socket.id) {
+            ctx.fillStyle = '#0074D9'; // This client, blue
+        } else {
+            ctx.fillStyle = '#FF4136'; // Other players, red
+        }
+        ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 // Initial draw

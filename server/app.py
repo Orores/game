@@ -26,11 +26,11 @@ def static_proxy(path):
 def handle_connect():
     # Initialize player position at center
     players[request.sid] = {'x': START_X, 'y': START_Y}
-    emit('state', players[request.sid])
+    emit('state', players)  # Send all players to new client
+    emit('state', players, broadcast=True)  # Update everyone
 
 @socketio.on('move')
 def handle_move(data):
-    # data['dx'], data['dy'] should be -1, 0, or 1
     dx = data.get('dx', 0)
     dy = data.get('dy', 0)
     pos = players.get(request.sid, {'x': START_X, 'y': START_Y})
@@ -42,11 +42,12 @@ def handle_move(data):
     y = max(PLAYER_RADIUS, min(BOX_HEIGHT - PLAYER_RADIUS, y))
 
     players[request.sid] = {'x': x, 'y': y}
-    emit('state', players[request.sid])
+    emit('state', players, broadcast=True)  # Broadcast updated state
 
 @socketio.on('disconnect')
 def handle_disconnect():
     players.pop(request.sid, None)
+    emit('state', players, broadcast=True)  # Broadcast updated state
 
 if __name__ == '__main__':
     import os
